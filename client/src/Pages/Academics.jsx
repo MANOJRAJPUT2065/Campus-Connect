@@ -40,7 +40,7 @@ const Academics = () => {
             </div>
           </div>
           <div className="footer w-full bg-gray-700 h-10 mt-7 flex justify-center items-center">
-            <h2 className="text-2xl text-white font-bold">UniVerse</h2>
+            <h2 className="text-2xl text-white font-bold">Multi-Verse</h2>
           </div>
         </div>
       </div>

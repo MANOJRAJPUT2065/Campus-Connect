@@ -13,8 +13,8 @@ const Events = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // const response = await axios.get(`${BASE_API}/events/getEvents`);
-        const response = await axios.get(`http://localhost:7071/events/getEvents`);
+        const response = await axios.get(`${BASE_API}/events/getEvents`);
+        // const response = await axios.get(`http://localhost:7071/events/getEvents`);
         //http://localhost:7071
         const sortedEvents = response.data.sort((a, b) => {
           const dateA = new Date(a.eventDate);

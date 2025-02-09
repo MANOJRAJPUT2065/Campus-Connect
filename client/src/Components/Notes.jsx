@@ -7,9 +7,7 @@ const Notes = ({ branch }) => {
     const [courses, setCourses] = useState([]);
 
     useEffect(() => {
-        // axios.get(`${BASE_API}/notes/getBranchNotes/${branch}`)
-        axios.get(`http://localhost:7071/notes/getBranchNotes/${branch}`)
-        //http://localhost:7071
+        axios.get(`${BASE_API}/notes/getBranchNotes/${branch}`)     
             .then(response => {
                 // console.log('Fetched data:', response.data);
                 if (response.data && response.data.subjects) {

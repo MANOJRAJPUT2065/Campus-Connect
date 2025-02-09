@@ -47,9 +47,7 @@ const EventForm = () => {
         data.append('eventImage', eventImage);
     
         try {
-            // const res = await axios.post(`${BASE_API}/events/addEvent`, data, {
-                const res = await axios.post(`http://localhost:7071/events/addEvent`, data, {
-                //http://localhost:7071
+            const res = await axios.post(`${BASE_API}/events/addEvent`, data, {
                 headers: {
                     'Content-Type': 'multipart/form-data'
                 }
