@@ -1,0 +1,24 @@
+# MongoDB Connection
+MONGODB_URI=mongodb://localhost:27017/meta-verse
+
+# Agora Video Call Configuration
+AGORA_APP_ID=your_agora_app_id_here
+AGORA_APP_CERTIFICATE=your_agora_app_certificate_here
+
+# OpenAI API Key (for AI Chatbot)
+OPENAI_API_KEY=your_openai_api_key_here
+
+# VAPID Keys (for Push Notifications)
+VAPID_PUBLIC_KEY=your_vapid_public_key_here
+VAPID_PRIVATE_KEY=your_vapid_private_key_here
+
+# Cloudinary Configuration (for image uploads)
+CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
+CLOUDINARY_API_KEY=your_cloudinary_api_key
+CLOUDINARY_API_SECRET=your_cloudinary_api_secret
+
+# Client URL
+CLIENT_URL=http://localhost:5173
+
+# Port
+PORT=7071

@@ -1,11 +1,10 @@
 import express from 'express';
 import { LikeRoute, UnlikeRoute, getRoute } from '../controllers/LikePostController.js';
 
-const router = express.Router()
+const router = express.Router();
 
+router.post('/like', LikeRoute);
+router.post('/unlike', UnlikeRoute);
+router.get('/getLikes', getRoute);
 
-router.post('', LikeRoute)
-router.delete('/toggle', UnlikeRoute)
-router.get('/:postId', getRoute)
-
-export default router
+export default router;

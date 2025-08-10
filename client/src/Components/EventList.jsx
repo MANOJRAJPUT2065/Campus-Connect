@@ -1,9 +1,10 @@
 
 
 
-//     import React, { useEffect, useState } from 'react';
+// import React, { useEffect, useState } from 'react';
 // import axios from 'axios';
-
+// import { v4 as uuidv4 } from 'uuid';
+// import { buildApiUrl } from '../config/api';
 
 // const EventList = () => {
 //   const [events, setEvents] = useState([]);
@@ -18,12 +19,12 @@
 //   const [registeredUsers, setRegisteredUsers] = useState({});
 //   const [expandedEventId, setExpandedEventId] = useState(null);
 
-//   const BASE_API = 'http://localhost:7071';
+//   // Using centralized API configuration
 
 //   useEffect(() => {
 //     const fetchEvents = async () => {
 //       try {
-//         const response = await axios.get(`${BASE_API}/events/getEvents`);
+//         const response = await axios.get(buildApiUrl('/events/getEvents'));
 //         setEvents(response.data);
 //       } catch (error) {
 //         console.error('Error fetching events:', error);
@@ -45,53 +46,55 @@
 //     }));
 //   };
 
-//   const handleSubmit = async (e) => {
-//     e.preventDefault();
 
-//     const userId = "64fabc1234567890deadbeef"; // Replace this with actual userId
+// const handleSubmit = async (e) => {
+//   e.preventDefault();
 
-//     try {
-//       await axios.post(`${BASE_API}/events/registerEvent`, {
-//         ...formData,
-//         eventId: selectedEvent._id,
-//         userId
-//       });
+//   // Generate random userId
+//   const userId = uuidv4();
 
-//       alert('Registration successful!');
-//       setShowForm(false);
-//       setFormData({ name: '', email: '', phone: '' });
-//     } catch (error) {
-//       console.error('Registration failed:', error);
-//       alert(error?.response?.data?.message || 'Registration failed');
-//     }
-//   };
-
-//  const handleViewUsers = async (eventName) => {
 //   try {
-//     if (expandedEventId === eventName) {
-//       setExpandedEventId(null);
-//       return;
-//     }
+//     await axios.post(buildApiUrl('/events/registerEvent'), {
+//       ...formData,
+//       eventId: selectedEvent._id,
+//       userId
+//     });
 
-//     const res = await axios.get(`${BASE_API}/events/registerEvent/getRegisteredUsersByName/${eventName}`)
-
-//     setRegisteredUsers(prev => ({
-//       ...prev,
-//       [eventName]: res.data.registeredUsers
-//     }));
-//     setExpandedEventId(eventName);
-//   } catch (err) {
-//     console.error("Failed to fetch users:", err);
+//     alert('Registration successful!');
+//     setShowForm(false);
+//     setFormData({ name: '', email: '', phone: '' });
+//   } catch (error) {
+//     console.error('Registration failed:', error);
+//     alert(error?.response?.data?.message || 'Registration failed');
 //   }
 // };
 
+
+//   const handleViewUsers = async (eventId) => {
+//     try {
+//       if (expandedEventId === eventId) {
+//         setExpandedEventId(null);
+//         return;
+//       }
+
+//       const res = await axios.get(buildApiUrl(`/events/registerEvent/getRegisteredUsersById/${eventId}`));
+
+//       setRegisteredUsers(prev => ({
+//         ...prev,
+//         [eventId]: res.data.registeredUsers
+//       }));
+//       setExpandedEventId(eventId);
+//     } catch (err) {
+//       console.error("Failed to fetch users:", err);
+//     }
+//   };
 
 //   return (
 //     <div className="min-h-screen bg-gradient-to-b from-black via-gray-900 to-black text-white p-6">
 //       <h1 className="text-4xl font-bold mb-6 text-center">🌟 Upcoming Events</h1>
 
 //       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-//         {events.map((event) => (
+//         {events && events.length > 0 ? events.map((event) => (
 //           <div key={event._id} className="bg-gray-800 rounded-xl shadow-md p-4 hover:shadow-lg transition">
 //             <h2 className="text-xl font-semibold">{event.eventName}</h2>
 //             <p className="text-sm text-gray-300">{event.eventDescription}</p>
@@ -107,13 +110,12 @@
 //               Register
 //             </button>
 
-//          <button
-//   onClick={() => handleViewUsers(event.eventName)}
-//   className="mt-2 ml-2 bg-yellow-500 hover:bg-yellow-600 text-black px-4 py-2 rounded"
-// >
-//   {expandedEventId === event.eventName ? "Hide Users" : "View Registered Users"}
-// </button>
-
+//             <button
+//               onClick={() => handleViewUsers(event._id)}
+//               className="mt-2 ml-2 bg-yellow-500 hover:bg-yellow-600 text-black px-4 py-2 rounded"
+//             >
+//               {expandedEventId === event._id ? "Hide Users" : "View Registered Users"}
+//             </button>
 
 //             {/* Show registered users for this event */}
 //             {expandedEventId === event._id && registeredUsers[event._id] && (
@@ -133,7 +135,11 @@
 //               </div>
 //             )}
 //           </div>
-//         ))}
+//         )) : (
+//           <div className="col-span-full text-center py-12">
+//             <p className="text-gray-400 text-lg">No events available at the moment.</p>
+//           </div>
+//         )}
 //       </div>
 
 //       {/* Registration Form Modal */}

@@ -17,6 +17,7 @@ const storage = new CloudinaryStorage({
 const upload = multer({ storage });
 
 router.post('', upload.single('image'), postRoute);
+console.log("Inside create post...");
 router.get('/getposts', getRoute);
 router.delete('/deletepost/:id', deleteRoute);
 

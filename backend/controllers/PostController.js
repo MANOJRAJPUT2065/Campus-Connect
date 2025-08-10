@@ -30,6 +30,8 @@ export const postRoute = async (req, res) => {
 };
 
 export const getRoute = async (req, res) => {
+  console.log("Inside get post route...");
+
   try {
     const posts = await Post.find();
     res.json(posts);

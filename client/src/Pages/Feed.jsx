@@ -1,47 +1,87 @@
 // Feed.js
-import { useEffect, useState } from "react";
-import FeedCard from "../Components/FeedCard";
-import axios from "axios";
-import BASE_API from '../api.js'
-
+import React, { useState, useEffect } from 'react';
+import FeedCard from '../Components/FeedCard';
+import AddPost from '../Components/AddPost';
+import { buildApiUrl } from '../config/api';
+import axios from 'axios';
 
 const Feed = () => {
   const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchPosts = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(buildApiUrl('/api/posts/getposts'));
+      setPosts(response.data);
+      setError(null);
+    } catch (error) {
+      console.error('Error fetching posts:', error);
+      setError('Failed to load posts');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     fetchPosts();
   }, []);
 
-
-
-  const fetchPosts = async () => {
-    // axios.get(`${BASE_API}/post/getposts`)
-    axios.get(`http://localhost:7071/post/getposts`)
-    //http://localhost:7071
-      .then(response => {
-        setPosts(response.data.reverse());
-      })
-      .catch(error => {
-        console.error(error);
-      });
+  const handlePostAdded = () => {
+    fetchPosts(); // Refresh posts when a new post is added
   };
 
-  return (
-    <div className="w-3/5 flex flex-col justify-center items-center gap-4 my-4">
-      {posts.map((post) => (
-        <FeedCard
-          key={post._id}
-          postId={post._id}
-          title={post.title}
-          content={post.content}
-          image={post.image}
-          author={post.author}
-          username={post.username}
-          createdAt={post.createdAt}
-        />
-      ))}
-    </div>
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
+  if (error) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="text-center">
+          <p className="text-red-600 mb-4">{error}</p>
+          <button 
+            onClick={fetchPosts}
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-100 py-8">
+      <div className="max-w-4xl mx-auto px-4">
+        {/* Add Post Section */}
+        <div className="mb-8">
+          <AddPost onPostAdded={handlePostAdded} />
+        </div>
+
+        {/* Posts Section */}
+        <div className="space-y-6">
+          {posts.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-gray-500 text-lg">No posts yet. Be the first to share something!</p>
+            </div>
+          ) : (
+            posts.map((post) => (
+              <FeedCard 
+                key={post._id} 
+                post={post} 
+                onPostUpdated={fetchPosts}
+              />
+            ))
+          )}
+        </div>
+      </div>
+    </div>
   );
 };
 

@@ -1,211 +1,258 @@
-import { useState, useEffect } from 'react';
-import LoginForm from './Login';
-import SignupForm from './SignupForm';
-import { useNavigate } from 'react-router-dom';
-import { Link } from 'react-router-dom';
-import { IoMdChatbubbles } from 'react-icons/io';
-// import { toast } from 'react-toastify';
-import axios from 'axios'; 
-import {jwtDecode} from 'jwt-decode';
-import BASE_API from '../api.js'
-import defaultImage from '../assets/default.avif';
-import logo from '../assets/logo.png'
-
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { FaUser, FaSignOutAlt, FaBell, FaSearch, FaBars, FaTimes } from 'react-icons/fa';
+import { buildApiUrl } from '../config/api';
+import axios from 'axios';
 
 const Navbar = () => {
+  const [user, setUser] = useState(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
-  const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('token'));
-  const [email, setEmail] = useState('');
-  const [admin, setAdminControl] = useState(false);
-  const [profilePicUrl, setProfilePicUrl] = useState(null);
-
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      const userData = jwtDecode(token);
-      const emailToken = userData.email;
-      setEmail(userData.email);
-      // axios.get(`${BASE_API}/auth/getUserDetails`, {
-        axios.get(`http://localhost:7071/auth/getUserDetails`, {
-        //http://localhost:7071
-        headers: {
-          'Authorization': `Bearer ${emailToken}`
-        }
-      })
-      .then(response => {
-        setProfilePicUrl(response.data.profilePicUrl);
-        setAdminControl(response.data.admin);
-      })
-      .catch(error => {
+    const fetchUserDetails = async () => {
+      try {
+        const response = await axios.get(buildApiUrl('/api/auth/getUserDetails'), {
+          withCredentials: true
+        });
+        setUser(response.data);
+      } catch (error) {
         console.error('Error fetching user details:', error);
-      });
-    }
-  }, [email]);
-
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      const decodedToken = jwtDecode(token);
-      const currentTime = Date.now() / 1000;
-      if (decodedToken.exp < currentTime) {
-        localStorage.removeItem('token');
-        setIsLoggedIn(false);
-      } else {
-        setIsLoggedIn(true);
+        // Handle error appropriately
       }
-    } else {
-      setIsLoggedIn(false);
-    }
+    };
+
+    fetchUserDetails();
   }, []);
-  
 
   const handleLogout = () => {
+    // Clear user data and redirect to login
+    setUser(null);
     localStorage.removeItem('token');
-    setIsLoggedIn(false);
-    navigate('/');
-    window.location.reload();
+    navigate('/login');
+  };
+
+  const handleSearch = (e) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+    }
+  };
+
+  const toggleMenu = () => {
+    setIsMenuOpen(!isMenuOpen);
   };
 
   return (
-    <div className="navbar bg-white text-black top-0 left-0 fixed z-50 mb-4">
-      <div className="navbar-start">
-        <div className="dropdown">
-          <div tabIndex={0} role="button" className="btn btn-ghost lg:hidden">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h8m-8 6h16" /></svg>
+    <nav className="bg-white shadow-lg border-b">
+      <div className="max-w-7xl mx-auto px-4">
+        <div className="flex justify-between items-center h-16">
+          {/* Logo/Brand */}
+          <div className="flex items-center">
+            <Link to="/" className="text-2xl font-bold text-blue-600">
+              MetaVerse
+            </Link>
           </div>
-          <ul tabIndex={0} className="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-white rounded-box w-52">
-            <li><a onClick={() => navigate('/')}>Feed</a></li>
-            <li>
-              <a onClick={() => navigate('/academics')}>Academics</a>
-              <ul className="p-2">
-                <li><a>Notes</a></li>
-                <li><a>Notices</a></li>
-              </ul>
-              <a onClick={() => navigate('/events')}>Events</a>
-              <ul className="p-3">
-                <li><a>College</a></li>
-                <li><a>Club</a></li>
-              </ul>
-            </li>
-          </ul>
-        </div>
 
-        <div className="logoTitle flex items-center">
-          <img src={logo} alt="Logo" className='w-14' />
-        <h1 className="text-xl font-bold">Campus-Connect</h1>
-        </div>
-      </div>
-      <div className="navbar-center hidden lg:flex">
-        <ul className="menu menu-horizontal px-1">
-          <li><Link to="/" className={location.pathname === '/' ? 'active' : ''}>Feed</Link></li>
-          <li><Link to="/academics" className={location.pathname === '/academics' ? 'active' : ''}>Academics</Link></li>
-          <li><Link to="/events" className={location.pathname === '/events' ? 'active' : ''}>Events</Link></li>
-          {/* <li>
-            <a onClick={() => isLoggedIn ? navigate('/post') : handleAddPostClick()} className={location.pathname === '/post' ? 'active' : ''}>
-              {isLoggedIn ? 'My Posts' : 'Add Post'}
-            </a>
-          </li> */}
-        </ul>
-      </div>
+          {/* Search Bar - Desktop */}
+          <div className="hidden md:flex flex-1 max-w-md mx-8">
+            <form onSubmit={handleSearch} className="w-full">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search posts, events, users..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full px-4 py-2 pl-10 pr-4 text-gray-700 bg-gray-100 rounded-lg focus:outline-none focus:bg-white focus:ring-2 focus:ring-blue-500"
+                />
+                <FaSearch className="absolute left-3 top-3 text-gray-400" />
+              </div>
+            </form>
+          </div>
 
-      <div className="navbar-end">
-        {isLoggedIn ? (
-          <>
-            <div className="btn btn-ghost btn-circle m-1 text-lg"
-              onClick={()=>{navigate(`/message/${email}`)}}
-            >
-                  <IoMdChatbubbles/>
-            </div>
-            <div className="dropdown dropdown-end flex">
-              <div tabIndex={0} role="button" className="btn btn-ghost btn-circle avatar">
-                <div className="w-10 rounded-full">
-                <img src={profilePicUrl || defaultImage} alt="Profile" className="profile-picture" />
+          {/* Navigation Links - Desktop */}
+          <div className="hidden md:flex items-center space-x-8">
+            <Link to="/" className="text-gray-700 hover:text-blue-600 transition-colors">
+              Home
+            </Link>
+            <Link to="/events" className="text-gray-700 hover:text-blue-600 transition-colors">
+              Events
+            </Link>
+            <Link to="/video-call" className="text-gray-700 hover:text-blue-600 transition-colors">
+              Video Call
+            </Link>
+            <Link to="/ai-chatbot" className="text-gray-700 hover:text-blue-600 transition-colors">
+              AI Chat
+            </Link>
+            <Link to="/notifications" className="text-gray-700 hover:text-blue-600 transition-colors">
+              <FaBell className="text-xl" />
+            </Link>
+          </div>
+
+          {/* User Menu - Desktop */}
+          <div className="hidden md:flex items-center space-x-4">
+            {user ? (
+              <div className="flex items-center space-x-4">
+                <div className="text-right">
+                  <p className="text-sm font-medium text-gray-900">{user.name || user.username}</p>
+                  <p className="text-xs text-gray-500">{user.email}</p>
+                </div>
+                <div className="relative group">
+                  <button className="flex items-center space-x-2 text-gray-700 hover:text-blue-600 transition-colors">
+                    <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                      <FaUser className="text-white text-sm" />
+                    </div>
+                  </button>
+                  {/* Dropdown Menu */}
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+                    <Link to="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                      Profile
+                    </Link>
+                    <Link to="/account" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                      Account Settings
+                    </Link>
+                    <button
+                      onClick={handleLogout}
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    >
+                      Sign Out
+                    </button>
+                  </div>
                 </div>
               </div>
-              <ul tabIndex={0} className="menu menu-sm dropdown-content mt-16 z-[1] p-2 shadow bg-white rounded-box w-52">
-                <li onClick={() => { navigate(`/account/${email}`, { state: { userEmail: email } }) }}> 
+            ) : (
+              <div className="flex items-center space-x-4">
+                <Link to="/login" className="text-gray-700 hover:text-blue-600 transition-colors">
+                  Login
+                </Link>
+                <Link to="/signup" className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                  Sign Up
+                </Link>
+              </div>
+            )}
+          </div>
 
-                  <a className="justify-between">
+          {/* Mobile Menu Button */}
+          <div className="md:hidden">
+            <button
+              onClick={toggleMenu}
+              className="text-gray-700 hover:text-blue-600 transition-colors"
+            >
+              {isMenuOpen ? <FaTimes size={24} /> : <FaBars size={24} />}
+            </button>
+          </div>
+        </div>
+
+        {/* Mobile Menu */}
+        {isMenuOpen && (
+          <div className="md:hidden">
+            <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 border-t">
+              {/* Mobile Search */}
+              <form onSubmit={handleSearch} className="mb-4">
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Search..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full px-4 py-2 pl-10 pr-4 text-gray-700 bg-gray-100 rounded-lg focus:outline-none focus:bg-white focus:ring-2 focus:ring-blue-500"
+                  />
+                  <FaSearch className="absolute left-3 top-3 text-gray-400" />
+                </div>
+              </form>
+
+              {/* Mobile Navigation Links */}
+              <Link
+                to="/"
+                className="block px-3 py-2 text-gray-700 hover:text-blue-600 transition-colors"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Home
+              </Link>
+              <Link
+                to="/events"
+                className="block px-3 py-2 text-gray-700 hover:text-blue-600 transition-colors"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Events
+              </Link>
+              <Link
+                to="/video-call"
+                className="block px-3 py-2 text-gray-700 hover:text-blue-600 transition-colors"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Video Call
+              </Link>
+              <Link
+                to="/ai-chatbot"
+                className="block px-3 py-2 text-gray-700 hover:text-blue-600 transition-colors"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                AI Chat
+              </Link>
+              <Link
+                to="/notifications"
+                className="block px-3 py-2 text-gray-700 hover:text-blue-600 transition-colors"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Notifications
+              </Link>
+
+              {/* Mobile User Menu */}
+              {user ? (
+                <div className="border-t pt-4 mt-4">
+                  <div className="px-3 py-2">
+                    <p className="text-sm font-medium text-gray-900">{user.name || user.username}</p>
+                    <p className="text-xs text-gray-500">{user.email}</p>
+                  </div>
+                  <Link
+                    to="/profile"
+                    className="block px-3 py-2 text-gray-700 hover:text-blue-600 transition-colors"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
                     Profile
-                  </a>
-                </li>
-                <li onClick={() => { navigate('/addpost') }}>
-                  <a className="justify-between">
-                    Add Post
-                  </a>
-                </li>
-                {admin && 
-                <li onClick={() => {navigate('/addEvent')}}>
-                <a className="justify-between">
-                  Add Event
-                </a>
-              </li>}
-                <li><a onClick={handleLogout} >Logout</a></li>
-              </ul>
+                  </Link>
+                  <Link
+                    to="/account"
+                    className="block px-3 py-2 text-gray-700 hover:text-blue-600 transition-colors"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    Account Settings
+                  </Link>
+                  <button
+                    onClick={() => {
+                      handleLogout();
+                      setIsMenuOpen(false);
+                    }}
+                    className="block w-full text-left px-3 py-2 text-gray-700 hover:text-blue-600 transition-colors"
+                  >
+                    Sign Out
+                  </button>
+                </div>
+              ) : (
+                <div className="border-t pt-4 mt-4 space-y-2">
+                  <Link
+                    to="/login"
+                    className="block px-3 py-2 text-gray-700 hover:text-blue-600 transition-colors"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    Login
+                  </Link>
+                  <Link
+                    to="/signup"
+                    className="block px-3 py-2 bg-blue-600 text-white rounded-lg mx-3 hover:bg-blue-700 transition-colors"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    Sign Up
+                  </Link>
+                </div>
+              )}
             </div>
-          </>
-        ) : (
-          <>
-            <button className="btn btn-sm btn-outline mx-2 text-black" onClick={() => document.getElementById('my_modal_1').showModal()}>
-              Sign-Up
-            </button>
-            <button className="btn btn-sm btn-outline text-black" onClick={() => document.getElementById('my_modal_2').showModal()}>
-              Login
-            </button>
-          </>
+          </div>
         )}
-
-        <dialog id="my_modal_1" className="modal">
-          <div className="modal-box bg-white modal-content">
-            <div className="btns flex justify-between">
-              <button className="btn btn-sm" onClick={() => {
-                document.getElementById('my_modal_1').close();
-                document.getElementById('my_modal_2').showModal();
-              }}>
-                Login here
-              </button>
-              <button onClick={() => {
-                document.getElementById('my_modal_1').close();
-              }} className="p-1 bg-white rounded-full text-black focus:outline-none">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
-                </svg>
-              </button>
-            </div>
-            <h3 className="font-bold text-lg mb-4 text-center">
-              Sign-Up
-            </h3>
-            <SignupForm />
-          </div>
-        </dialog>
-
-        <dialog id="my_modal_2" className="modal">
-          <div className="modal-box bg-white">
-            <div className="btns flex justify-between">
-              <button className="btn btn-sm" onClick={() => {
-                document.getElementById('my_modal_2').close();
-                document.getElementById('my_modal_1').showModal();
-              }}>
-                Create an account
-              </button>
-              <button onClick={() => {
-                document.getElementById('my_modal_2').close();
-              }} className="p-1 bg-white rounded-full text-black focus:outline-none">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
-                </svg>
-              </button>
-            </div>
-            <h3 className="font-bold text-lg my-4 text-center">
-              Login
-            </h3>
-            <LoginForm />
-          </div>
-        </dialog>
-
       </div>
-    </div>
+    </nav>
   );
 };
 
