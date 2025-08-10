@@ -15,6 +15,7 @@
     "axios": "^1.6.8",
     "dotenv": "^16.4.5",
     "emoji-picker-react": "^4.9.2",
+    "framer-motion": "^12.23.12",
     "jsonwebtoken": "^9.0.2",
     "jwt-decode": "^4.0.0",
     "react": "^18.3.1",
@@ -24,7 +25,8 @@
     "react-router-dom": "^6.23.0",
     "react-timeago": "^7.2.0",
     "react-toastify": "^10.0.5",
-    "socket.io-client": "^4.7.5"
+    "socket.io-client": "^4.7.5",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.66",

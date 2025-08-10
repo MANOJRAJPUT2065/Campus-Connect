@@ -93,7 +93,7 @@ const Navbar = () => {
 
         <div className="logoTitle flex items-center">
           <img src={logo} alt="Logo" className='w-14' />
-        <h1 className="text-xl font-bold">Multi-Verse</h1>
+        <h1 className="text-xl font-bold">Campus-Connect</h1>
         </div>
       </div>
       <div className="navbar-center hidden lg:flex">

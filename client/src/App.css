@@ -2,9 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
-
-
-body, html{
+/* 🌌 Starry sky background base */
+body, html {
   --dot-bg: black;
   --dot-color: white;
   --dot-size: 1px;
@@ -13,7 +12,82 @@ body, html{
     linear-gradient(90deg, var(--dot-bg) calc(var(--dot-space) - var(--dot-size)), transparent 1%) center / var(--dot-space) var(--dot-space),
     linear-gradient(var(--dot-bg) calc(var(--dot-space) - var(--dot-size)), transparent 1%) center / var(--dot-space) var(--dot-space),
     var(--dot-color);
+  background-color: #090a0f;
+  overflow-x: hidden;
 }
+
+/* 🌙 Moon */
+.moon {
+  position: absolute;
+  top: 80px;
+  left: 100px;
+  width: 120px;
+  height: 120px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 60px #fff, 0 0 100px #f0f8ff, 0 0 200px #b0c4de;
+  z-index: 0;
+}
+
+/* ⭐ Stars using box-shadow trick */
+.stars {
+  width: 1px;
+  height: 1px;
+  background: transparent;
+  box-shadow:
+    1000px 200px white,
+    300px 400px white,
+    800px 600px white,
+    600px 100px white,
+    200px 300px white,
+    400px 700px white,
+    900px 500px white;
+  animation: animateStars 50s linear infinite;
+}
+
+@keyframes animateStars {
+  from {
+    transform: translateY(0px);
+  }
+  to {
+    transform: translateY(-1000px);
+  }
+}
+
+/* 🌠 Shooting Stars */
+.shooting-star {
+  position: absolute;
+  top: 0;
+  left: -100px;
+  width: 3px;
+  height: 3px;
+  background: white;
+  box-shadow: 0 0 6px white;
+  transform: rotate(-45deg);
+  animation: shooting 5s linear infinite;
+  opacity: 0.8;
+}
+
+.shooting-star.delay-2000 {
+  animation-delay: 2s;
+}
+
+.shooting-star.delay-4000 {
+  animation-delay: 4s;
+}
+
+@keyframes shooting {
+  0% {
+    transform: translateX(0) translateY(0) rotate(-45deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(1000px) translateY(600px) rotate(-45deg);
+    opacity: 0;
+  }
+}
+
+/* === Your existing styles (untouched below) === */
 
 ::-webkit-scrollbar {
   width: 7px;
@@ -24,7 +98,6 @@ body, html{
   border-radius: 10px;
 }
 
-/* Hide the scrollbar in specific elements */
 .myposts::-webkit-scrollbar,
 .left::-webkit-scrollbar,
 .right::-webkit-scrollbar {

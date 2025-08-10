@@ -10,7 +10,7 @@ const eventSchema = new mongoose.Schema({
     eventTime: { type: String, required: true },
     venue: { type: String, required: true },
     registrationLink: { type: String, required: true },
-    eventImage: { type: String, required: true }
+    eventImage: { type: String, required: false }
 });
 
 const Event = mongoose.model('Event', eventSchema);

@@ -17,6 +17,8 @@ import UserProfileRoute from './routes/UserProfileRoute.js';
 import MessageRoute from './routes/MessageRoute.js';
 import NotesRoute from './routes/NotesRoute.js';
 import EventRoute from './routes/EventRoute.js';
+import contactRoute from './routes/ContactRoute.js';
+
 
 const app = express();
 app.use(cors({
@@ -27,7 +29,9 @@ app.use(cors({
 app.use(express.json());
 
 const mongoURL = process.env.MONGODB_URI;
-mongoose.connect(mongoURL);
+mongoose.connect(mongoURL)
+  .then(() => console.log("✅ Connected to MongoDB"))
+  .catch((err) => console.error("❌ MongoDB connection error:", err));
 
 app.use('/auth', AuthRoute);
 app.use('/bookmark', BookmarkRoute);
@@ -38,6 +42,8 @@ app.use('/user', UserProfileRoute);
 app.use('/messages', MessageRoute);
 app.use('/notes', NotesRoute);
 app.use('/events', EventRoute);
+app.use('/api/contact', contactRoute);
+
 
 const server = http.createServer(app);
 socketConfig(server);

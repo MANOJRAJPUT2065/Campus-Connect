@@ -1,88 +1,56 @@
-// import Event from '../models/Event.js';
-// import cloudinary from 'cloudinary';
-
-// export const addEvent = async (req, res) => {
-//     try {
-//         const { clubName, clubCoordinator, contactNumber, eventName, eventDescription, eventDate, eventTime, venue, registrationLink } = req.body;
-
-//         const image = req.file.path;
-
-//         const result = await cloudinary.uploader.upload(image);
-//         const newEvent = new Event({
-//             clubName,
-//             clubCoordinator,
-//             contactNumber,
-//             eventName,
-//             eventDescription,
-//             eventDate,
-//             eventTime,
-//             venue,
-//             registrationLink,
-//             eventImage: result.secure_url 
-//         });
-
-//         const savedEvent = await newEvent.save();
-//         res.json(savedEvent);
-//     } catch (err) {
-//         console.error(err);
-//         res.status(500).json({ message: "Server Error" });
-//     }
-// };
-
-// export const getAllEvents = async (req, res) => {
-//     try {
-//         const events = await Event.find();
-//         res.json(events);
-//     } catch (err) {
-//         console.error(err);
-//         res.status(500).json({ message: "Server Error" });
-//     }
-// };
-
-
+// controllers/EventController.js
 import Event from '../models/Event.js';
-import cloudinary from 'cloudinary'; // Not necessary to use this here anymore
+import { appendEventToSheet } from '../utils/googleSheet.js'; // Ensure this exists
 
 export const addEvent = async (req, res) => {
-    try {
-        console.log(req.file); // Check if req.file exists and contains a path
+  console.log("Inside adding event");
+  try {
+    const {
+      clubName,
+      clubCoordinator,
+      contactNumber,
+      eventName,
+      eventDescription,
+      eventDate,
+      eventTime,
+      venue,
+      registrationLink
+    } = req.body;
 
-        const { clubName, clubCoordinator, contactNumber, eventName, eventDescription, eventDate, eventTime, venue, registrationLink } = req.body;
+  
 
-        if (!req.file) {
-            return res.status(400).json({ message: "Image file is required." });
-        }
+    const newEvent = new Event({
+      clubName,
+      clubCoordinator,
+      contactNumber,
+      eventName,
+      eventDescription,
+      eventDate,
+      eventTime,
+      venue,
+      registrationLink,
+     
+    });
 
-        const imageUrl = req.file.path; // The Cloudinary URL of the uploaded image
+    const savedEvent = await newEvent.save();
 
-        const newEvent = new Event({
-            clubName,
-            clubCoordinator,
-            contactNumber,
-            eventName,
-            eventDescription,
-            eventDate,
-            eventTime,
-            venue,
-            registrationLink,
-            eventImage: imageUrl // Save Cloudinary image URL
-        });
+    // Optional: Push to Google Sheet
+    // await appendEventToSheet({ ...newEvent.toObject() });
 
-        const savedEvent = await newEvent.save();
-        res.json(savedEvent);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: "Server Error" });
-    }
+    res.status(201).json(savedEvent);
+  } catch (error) {
+    console.error("❌ Error in addEvent:", error.message);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
 };
-
 
 export const getAllEvents = async (req, res) => {
-    try {
-        const events = await Event.find();
-        res.json(events);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: "Server Error" });
-    }
+  try {
+    const events = await Event.find();
+    res.status(200).json(events);
+  } catch (error) {
+    console.error("❌ Error in getAllEvents:", error.message);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
 };
+
