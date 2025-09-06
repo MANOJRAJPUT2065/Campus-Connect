@@ -3,15 +3,39 @@ import cloudinary from '../config/cloudinary.js';
 import { extractPublicId } from 'cloudinary-build-url';
 
 export const postRoute = async (req, res) => {
+  console.log("Adding post re...");
   try {
     const { title, content, email, username } = req.body;
-    const image = req.file.path?req.file.path:null;
+    let image = null;
     
-    // if (req.file) {
-    //   const result = await cloudinary.uploader.upload(req.file.path);
-    //   image = result.secure_url;
-    //   imageId = result.public_id;
-    // }
+    // If using CloudinaryStorage in multer, the file is already uploaded
+    // and req.file.path contains the Cloudinary URL. Support both cases
+    // (direct CloudinaryStorage URL and local path uploads).
+    if (req.file) {
+      try {
+        if (req.file.path && /^https?:\/\//i.test(req.file.path)) {
+          // Already uploaded by CloudinaryStorage
+          image = req.file.path;
+        } else if (req.file.path) {
+          // Local path provided (fallback) → upload then best-effort cleanup
+          const result = await cloudinary.uploader.upload(req.file.path);
+          image = result.secure_url;
+          try {
+            const fs = await import('fs');
+            fs.unlinkSync(req.file.path);
+          } catch (_) {
+            // ignore cleanup errors
+          }
+        }
+      } catch (uploadError) {
+        console.error('Cloudinary upload error:', uploadError);
+        return res.status(500).json({ error: 'Failed to upload image' });
+      }
+    }
+
+    if (!title || !content || !email || !username) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
 
     const newPost = new Post({
       title,

@@ -6,24 +6,28 @@ import { useNavigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 import { FaTrash, FaHeart } from 'react-icons/fa';
 import {toast} from 'react-toastify';
-import BASE_API from '../api.js'
+import { buildApiUrl } from '../config/api';
 import TimeAgo from 'react-timeago';
 import defaultImage from '../assets/default.avif';
-
-
 
 const CommentSection = ({ postId, onCommentSubmit }) => {
   const [userProfilePics, setUserProfilePics] = useState({});
   const [comments, setComments] = useState([]);
   const navigate = useNavigate();
+
   const token = localStorage.getItem('token');
-  const userData = jwtDecode(token);
-  const author = userData.email;
+  let userData = null;
+  if (token && typeof token === 'string') {
+    try {
+      userData = jwtDecode(token);
+    } catch (e) {
+      console.warn('Invalid JWT token in localStorage');
+    }
+  }
+  const author = userData?.email || '';
 
   useEffect(() => {
-    // axios.get(`${BASE_API}/comment/get/${postId}`)
-    axios.get(`http://localhost:7071/comment/get/${postId}`)
-    //http://localhost:7071
+    axios.get(buildApiUrl(`/api/comments/getComments/${postId}`))
       .then(response => {
         setComments(response.data);
       })
@@ -34,11 +38,7 @@ const CommentSection = ({ postId, onCommentSubmit }) => {
 
   useEffect(() => {
     comments.forEach(comment => {
-      axios.get(`http://localhost:7071/auth/getUserDetails`, {
-        headers: {
-          'Authorization': `Bearer ${comment.author}`
-        }
-      })
+      axios.get(buildApiUrl(`/api/users/auth/getUserDetails?email=${comment.author}`))
         .then(response => {
           const profilePicUrl = response.data.profilePicUrl;
           setUserProfilePics(prevState => ({
@@ -52,11 +52,9 @@ const CommentSection = ({ postId, onCommentSubmit }) => {
     });
   }, [comments]);
   
-  
-
   const handleDelete = async (commentId) => {
     try {
-      const response = await axios.delete(`http://localhost:7071/comment/delete/${commentId}`);
+      await axios.delete(buildApiUrl(`/api/comments/deleteComment/${commentId}`));
       toast.warning("Comment deleted");
       setComments(comments.filter(comment => comment._id !== commentId));
     } catch (error) {
@@ -73,7 +71,7 @@ const CommentSection = ({ postId, onCommentSubmit }) => {
   }
 
   return (
-<div className="max-h-90 overflow-y-auto right">
+    <div className="max-h-90 overflow-y-auto right">
       {comments.map((comment, index) => (
         <div key={index} className="flex justify-between border border-gray-400 rounded-md m-1">
           <div className="p-3 relative w-full">

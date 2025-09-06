@@ -2,9 +2,6 @@
 const CACHE_NAME = 'meta-verse-v1';
 const urlsToCache = [
   '/',
-  '/online-classes',
-  '/static/js/bundle.js',
-  '/static/css/main.css'
 ];
 
 // Install event - cache resources
@@ -16,79 +13,72 @@ self.addEventListener('install', (event) => {
         return cache.addAll(urlsToCache);
       })
   );
+  self.skipWaiting();
 });
 
 // Fetch event - serve from cache if available
 self.addEventListener('fetch', (event) => {
+  const req = event.request;
+  const url = new URL(req.url);
+
+  // Only handle same-origin GET requests. Let all others pass through.
+  if (req.method !== 'GET' || url.origin !== self.location.origin) {
+    return; // do not call respondWith
+  }
+
   event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        // Return cached version or fetch from network
-        return response || fetch(event.request);
-      })
+    caches.match(req).then((resp) => resp || fetch(req))
   );
 });
 
 // Push event - handle incoming push notifications
 self.addEventListener('push', (event) => {
-  console.log('Push event received:', event);
-  
-  let notificationData = {
-    title: 'Meta-Verse Notification',
-    body: 'You have a new notification',
-    icon: '/favicon.ico',
-    badge: '/favicon.ico',
-    data: {
-      url: '/online-classes'
-    }
-  };
+  try {
+    const data = event.data ? event.data.json() : {};
+    const title = data.title || 'Meta-Verse Notification';
+    const body = data.body || 'You have a new notification';
+    const icon = data.icon || '/icon-192x192.png';
+    const badge = data.badge || '/badge-72x72.png';
+    const payloadData = data.data || {};
 
-  if (event.data) {
-    try {
-      const data = event.data.json();
-      notificationData = { ...notificationData, ...data };
-    } catch (error) {
-      console.error('Error parsing push data:', error);
-    }
+    event.waitUntil(
+      self.registration.showNotification(title, {
+        body,
+        icon,
+        badge,
+        data: payloadData,
+      })
+    );
+  } catch (e) {
+    // Fallback if payload is not JSON
+    event.waitUntil(
+      self.registration.showNotification('Meta-Verse Notification', {
+        body: 'You have a new notification',
+        icon: '/icon-192x192.png',
+        badge: '/badge-72x72.png',
+      })
+    );
   }
-
-  const options = {
-    body: notificationData.body,
-    icon: notificationData.icon,
-    badge: notificationData.badge,
-    data: notificationData.data,
-    requireInteraction: true,
-    actions: [
-      {
-        action: 'view',
-        title: 'View',
-        icon: '/favicon.ico'
-      },
-      {
-        action: 'dismiss',
-        title: 'Dismiss',
-        icon: '/favicon.ico'
-      }
-    ]
-  };
-
-  event.waitUntil(
-    self.registration.showNotification(notificationData.title, options)
-  );
 });
 
 // Notification click event
 self.addEventListener('notificationclick', (event) => {
-  console.log('Notification clicked:', event);
-  
   event.notification.close();
+  const targetUrl = event.notification.data?.url || '/';
 
-  if (event.action === 'view' || event.action === undefined) {
-    // Open the app or specific page
-    event.waitUntil(
-      clients.openWindow(event.notification.data?.url || '/online-classes')
-    );
-  }
+  event.waitUntil(
+    clients.matchAll({ type: 'window' }).then((clientList) => {
+      for (const client of clientList) {
+        if ('focus' in client) {
+          client.navigate(targetUrl);
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
+    })
+  );
 });
 
 // Background sync event
@@ -124,6 +114,6 @@ self.addEventListener('activate', (event) => {
           }
         })
       );
-    })
+    }).then(() => self.clients.claim())
   );
 });

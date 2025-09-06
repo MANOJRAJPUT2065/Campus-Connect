@@ -10,7 +10,7 @@ import { MdBookmark } from 'react-icons/md';
 import { IoMdPaper } from 'react-icons/io';
 import MyPost from '../Components/MyPost';
 import SavedPost from '../Components/SavedPosts';
-import BASE_API from '../api';
+import { buildApiUrl } from '../config/api';
 import defaultImage from '../assets/default.avif';
 
 const Account = () => {
@@ -28,34 +28,35 @@ const Account = () => {
   const userData = token ? jwtDecode(token) : null;
 
   useEffect(() => {
-    if (userEmail) {
-      // axios.get(`${BASE_API}/auth/getUserDetails`, {
-        axios.get(`http://localhost:7071/auth/getUserDetails`, {
-        //http://localhost:7071
-        headers: {
-          'Authorization': `Bearer ${userEmail}`
-        }
-      })
-        .then(response => {
-          setProfilePicUrl(response.data.profilePicUrl);
-          setUsername(response.data.username);
-          setUsn(response.data.usn);
-        })
-        .catch(error => {
-          console.error('Error fetching user details:', error);
-        });
+    const targetEmail = id || userEmail;
+    if (!targetEmail) return;
 
-      axios
-        .get(`http://localhost:7071}/post/getposts`)
-        .then((response) => {
-          const userPosts = response.data.filter((post) => post.author === userEmail);
-          setPostCount(userPosts.length);
-        })
-        .catch((error) => {
-          console.error(error);
-        });
-    }
-  }, [userEmail]);
+    // Fetch user details by email
+    axios
+      .get(buildApiUrl(`/api/users/auth/getUserDetails?email=${encodeURIComponent(targetEmail)}`))
+      .then((response) => {
+        setProfilePicUrl(response.data.profilePicUrl);
+        setUsername(response.data.username);
+        setUsn(response.data.usn);
+      })
+      .catch((error) => {
+        console.error('Error fetching user details:', error);
+      });
+
+    // Fetch posts and count for this user
+    axios
+      .get(buildApiUrl('/api/posts/getposts'))
+      .then((response) => {
+        const userPosts = Array.isArray(response.data)
+          ? response.data
+          : Array.isArray(response.data?.posts) ? response.data.posts : [];
+        const count = userPosts.filter((post) => post.author === targetEmail).length;
+        setPostCount(count);
+      })
+      .catch((error) => {
+        console.error(error);
+      });
+  }, [id, userEmail]);
 
   const handleUpload = () => {
     const fileInput = document.getElementById('profilePicInput');
@@ -69,7 +70,7 @@ const Account = () => {
     formData.append('usn', usn);
     
     axios
-      .post(`http://localhost:7071/user/uploadProfilePic`, formData, {
+      .post(buildApiUrl('/api/users/profile/uploadProfilePic'), formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
           Authorization: `Bearer ${token}`,
@@ -99,7 +100,7 @@ const Account = () => {
 
   const confirmRemovePhoto = () => {
     axios
-      .delete(`http://localhost:7071/user/deleteProfilePic`, {
+      .delete(buildApiUrl('/api/users/profile/deleteProfilePic'), {
         headers: {
           Authorization: `Bearer ${token}`,
         },

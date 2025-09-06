@@ -2,15 +2,30 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaBell, FaBellSlash, FaTimes, FaExclamationTriangle, FaInfoCircle, FaCheckCircle, FaCog } from 'react-icons/fa';
 import { toast } from 'react-toastify';
+import { buildApiUrl } from '../config/api';
+import { useNavigate } from 'react-router-dom';
+
+const urlBase64ToUint8Array = (base64String) => {
+  console.log("Inside puush notifications ...");
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+};
 
 const PushNotifications = () => {
+  const navigate = useNavigate();
   const [isSupported, setIsSupported] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [showSettings, setShowSettings] = useState(false);
+  const [subscriptionId, setSubscriptionId] = useState(null);
 
   useEffect(() => {
-    // Check if push notifications are supported
     if ('serviceWorker' in navigator && 'PushManager' in window) {
       setIsSupported(true);
     }
@@ -18,23 +33,91 @@ const PushNotifications = () => {
 
   const subscribeToNotifications = async () => {
     try {
-      const userId = localStorage.getItem('userId') || 'demo-user';
-      
-      const response = await fetch('/api/features/notifications/subscribe', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ userId })
-      });
+      if (!('serviceWorker' in navigator)) {
+        toast.error('Service workers not supported');
+        return;
+      }
 
+      // Ask notification permission first
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        toast.error('Please allow notifications');
+        return;
+      }
+
+      console.log('[Push] Registering service worker...');
+      // Register service worker (explicit scope)
+      const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+      console.log('[Push] Service worker state', { installing: !!registration.installing, waiting: !!registration.waiting, active: !!registration.active });
+      // Wait for ready state to ensure pushManager is available
+      const readyReg = await navigator.serviceWorker.ready;
+      const swReg = readyReg || registration;
+
+      // Get VAPID public key
+      console.log('[Push] Fetching VAPID public key...');
+      const vapidRes = await fetch(buildApiUrl('/api/notifications/vapid-public-key'));
+      const vapidData = await vapidRes.json();
+      console.log('[Push] VAPID response', vapidData);
+      if (!vapidData.success || !vapidData.publicKey) {
+        toast.error('Notifications not configured on server');
+        return;
+      }
+
+      // Use existing subscription if available, else create
+      let pushSubscription = await swReg.pushManager.getSubscription();
+      console.log('[Push] Existing subscription', !!pushSubscription);
+      if (!pushSubscription) {
+        const subscribeOptions = {
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidData.publicKey),
+        };
+        try {
+          console.log('[Push] Subscribing for push...');
+          pushSubscription = await swReg.pushManager.subscribe(subscribeOptions);
+        } catch (err) {
+          console.error('[Push] Initial subscribe failed', err);
+          // If there is an old subscription, try to unsubscribe and retry once
+          const existing = await swReg.pushManager.getSubscription();
+          if (existing) {
+            try {
+              console.log('[Push] Unsubscribing stale subscription...');
+              await existing.unsubscribe();
+            } catch (uerr) {
+              console.warn('[Push] Unsubscribe error', uerr);
+            }
+          }
+          console.log('[Push] Retrying subscribe...');
+          pushSubscription = await swReg.pushManager.subscribe(subscribeOptions);
+        }
+      }
+      console.log('[Push] Subscription ready', pushSubscription ? { endpoint: pushSubscription.endpoint } : null);
+
+      const userFromToken = (() => {
+        try {
+          const token = localStorage.getItem('token');
+          if (!token) return null;
+          const payload = JSON.parse(atob(token.split('.')[1] || ''));
+          return payload?.email || null;
+        } catch (_) {
+          return null;
+        }
+      })();
+      const userId = userFromToken || localStorage.getItem('userId') || 'demo-user';
+      console.log('[Push] Registering subscription on server for user', userId);
+      const response = await fetch(buildApiUrl('/api/notifications/subscribe'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, subscription: pushSubscription }),
+      });
       const data = await response.json();
-      
+      console.log('[Push] Server subscribe response', data);
+
       if (data.success) {
+        setSubscriptionId(data.subscriptionId);
         setIsSubscribed(true);
         toast.success('Successfully subscribed to notifications!');
       } else {
-        toast.error('Failed to subscribe to notifications');
+        toast.error(data.error || 'Failed to subscribe to notifications');
       }
     } catch (error) {
       console.error('Error subscribing to notifications:', error);
@@ -44,24 +127,15 @@ const PushNotifications = () => {
 
   const unsubscribeFromNotifications = async () => {
     try {
-      const userId = localStorage.getItem('userId') || 'demo-user';
-      
-      const response = await fetch('/api/features/notifications/unsubscribe', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ userId })
-      });
-
-      const data = await response.json();
-      
-      if (data.success) {
-        setIsSubscribed(false);
-        toast.success('Unsubscribed from notifications');
-      } else {
-        toast.error('Failed to unsubscribe');
+      if (subscriptionId) {
+        await fetch(buildApiUrl('/api/notifications/unsubscribe'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subscriptionId }),
+        });
       }
+      setIsSubscribed(false);
+      toast.success('Unsubscribed from notifications');
     } catch (error) {
       console.error('Error unsubscribing:', error);
       toast.error('Failed to unsubscribe');
@@ -70,18 +144,16 @@ const PushNotifications = () => {
 
   const sendTestNotification = async () => {
     try {
-      const userId = localStorage.getItem('userId') || 'demo-user';
-      
-      const response = await fetch('/api/features/notifications/test', {
+      if (!subscriptionId) {
+        toast.error('Please subscribe first');
+        return;
+      }
+      const response = await fetch(buildApiUrl('/api/notifications/test'), {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ userId })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subscriptionId }),
       });
-
       const data = await response.json();
-      
       if (data.success) {
         toast.success('Test notification sent!');
       } else {
@@ -129,18 +201,31 @@ const PushNotifications = () => {
             <p className="text-gray-600">Stay updated with urgent announcements and class updates</p>
           </div>
         </div>
-        
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => setShowSettings(!showSettings)}
-          className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-        >
-          <FaCog className="text-xl" />
-        </motion.button>
+        <div className="flex items-center gap-2">
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setShowSettings(!showSettings)}
+            className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+            title="Settings"
+          >
+            <FaCog className="text-xl" />
+          </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => {
+              if (window.history.length > 1) navigate(-1); else navigate('/');
+            }}
+            className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+            aria-label="Close"
+            title="Close"
+          >
+            <FaTimes className="text-xl" />
+          </motion.button>
+        </div>
       </div>
 
-      {/* Notification Status */}
       <div className="mb-6">
         <div className={`p-4 rounded-lg border ${
           isSubscribed 
@@ -185,7 +270,6 @@ const PushNotifications = () => {
         </div>
       </div>
 
-      {/* Settings Panel */}
       <AnimatePresence>
         {showSettings && (
           <motion.div
@@ -196,29 +280,24 @@ const PushNotifications = () => {
           >
             <div className="bg-gray-50 rounded-lg p-4 space-y-4">
               <h4 className="font-semibold text-gray-900">Notification Settings</h4>
-              
               <div className="space-y-3">
                 <label className="flex items-center space-x-3">
                   <input type="checkbox" defaultChecked className="rounded text-blue-600" />
                   <span className="text-gray-700">Urgent announcements</span>
                 </label>
-                
                 <label className="flex items-center space-x-3">
                   <input type="checkbox" defaultChecked className="rounded text-blue-600" />
                   <span className="text-gray-700">Class schedule changes</span>
                 </label>
-                
                 <label className="flex items-center space-x-3">
                   <input type="checkbox" defaultChecked className="rounded text-blue-600" />
                   <span className="text-gray-700">Assignment deadlines</span>
                 </label>
-                
                 <label className="flex items-center space-x-3">
                   <input type="checkbox" defaultChecked className="rounded text-blue-600" />
                   <span className="text-gray-700">Exam notifications</span>
                 </label>
               </div>
-
               {isSubscribed && (
                 <motion.button
                   whileHover={{ scale: 1.02 }}
@@ -234,7 +313,6 @@ const PushNotifications = () => {
         )}
       </AnimatePresence>
 
-      {/* Recent Notifications */}
       <div>
         <h4 className="font-semibold text-gray-900 mb-3">Recent Notifications</h4>
         <div className="space-y-2">
@@ -252,7 +330,10 @@ const PushNotifications = () => {
                 animate={{ opacity: 1, x: 0 }}
                 className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg"
               >
-                {getNotificationIcon(notification.type)}
+                {/* icon */}
+                <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
+                  {getNotificationIcon(notification.type)}
+                </div>
                 <div className="flex-1">
                   <p className="font-medium text-gray-900">{notification.title}</p>
                   <p className="text-sm text-gray-600">{notification.body}</p>

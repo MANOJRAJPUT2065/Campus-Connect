@@ -1,8 +1,20 @@
 import express from 'express';
 import webpush from 'web-push';
 import { v4 as uuidv4 } from 'uuid';
+import dotenv from 'dotenv';
+
+// Ensure env vars are loaded even if the main server loads them later
+dotenv.config();
 
 const router = express.Router();
+
+// Basic request logger for notifications router
+router.use((req, res, next) => {
+  try {
+    console.log(`[Notifications] ${req.method} ${req.originalUrl}`);
+  } catch (_) {}
+  next();
+});
 
 // VAPID keys configuration - make them optional
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
@@ -27,6 +39,7 @@ const notifications = new Map();
 // POST /api/notifications/subscribe - Subscribe to push notifications
 router.post('/subscribe', (req, res) => {
   try {
+    console.log('[Notifications] /subscribe payload keys:', Object.keys(req.body || {}));
     if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
       return res.status(503).json({
         success: false,
@@ -35,6 +48,10 @@ router.post('/subscribe', (req, res) => {
     }
 
     const { subscription, userId, userInfo } = req.body;
+    try {
+      console.log('[Notifications] subscribe userId:', userId);
+      console.log('[Notifications] subscription endpoint:', subscription?.endpoint);
+    } catch (_) {}
     
     if (!subscription || !userId) {
       return res.status(400).json({
@@ -59,7 +76,7 @@ router.post('/subscribe', (req, res) => {
       message: 'Successfully subscribed to push notifications'
     });
   } catch (error) {
-    console.error('Subscribe error:', error);
+    console.error('Subscribe error:', error && (error.stack || error.message || error));
     res.status(500).json({
       success: false,
       error: 'Failed to subscribe'
@@ -70,6 +87,7 @@ router.post('/subscribe', (req, res) => {
 // POST /api/notifications/unsubscribe - Unsubscribe from push notifications
 router.post('/unsubscribe', (req, res) => {
   try {
+    console.log('[Notifications] /unsubscribe body:', req.body);
     const { subscriptionId } = req.body;
     
     if (!subscriptionId) {
@@ -95,7 +113,7 @@ router.post('/unsubscribe', (req, res) => {
       message: 'Successfully unsubscribed from push notifications'
     });
   } catch (error) {
-    console.error('Unsubscribe error:', error);
+    console.error('Unsubscribe error:', error && (error.stack || error.message || error));
     res.status(500).json({
       success: false,
       error: 'Failed to unsubscribe'
@@ -106,6 +124,7 @@ router.post('/unsubscribe', (req, res) => {
 // POST /api/notifications/send - Send notification to specific user
 router.post('/send', async (req, res) => {
   try {
+    console.log('[Notifications] /send body keys:', Object.keys(req.body || {}));
     if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
       return res.status(503).json({
         success: false,
@@ -183,7 +202,7 @@ router.post('/send', async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('Send notification error:', error);
+    console.error('Send notification error:', error && (error.stack || error.message || error));
     res.status(500).json({
       success: false,
       error: 'Failed to send notification'
@@ -194,6 +213,7 @@ router.post('/send', async (req, res) => {
 // POST /api/notifications/broadcast - Send notification to all subscribers
 router.post('/broadcast', async (req, res) => {
   try {
+    console.log('[Notifications] /broadcast body keys:', Object.keys(req.body || {}));
     if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
       return res.status(503).json({
         success: false,
@@ -265,7 +285,7 @@ router.post('/broadcast', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Broadcast error:', error);
+    console.error('Broadcast error:', error && (error.stack || error.message || error));
     res.status(500).json({
       success: false,
       error: 'Failed to broadcast notification'
@@ -276,6 +296,7 @@ router.post('/broadcast', async (req, res) => {
 // POST /api/notifications/test - Send test notification
 router.post('/test', async (req, res) => {
   try {
+    console.log('[Notifications] /test body:', req.body);
     if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
       return res.status(503).json({
         success: false,
@@ -315,7 +336,7 @@ router.post('/test', async (req, res) => {
       message: 'Test notification sent successfully'
     });
   } catch (error) {
-    console.error('Test notification error:', error);
+    console.error('Test notification error:', error && (error.stack || error.message || error));
     res.status(500).json({
       success: false,
       error: 'Failed to send test notification'
@@ -398,6 +419,7 @@ router.put('/:notificationId/read', (req, res) => {
 
 // GET /api/notifications/vapid-public-key - Get VAPID public key
 router.get('/vapid-public-key', (req, res) => {
+  console.log('[Notifications] /vapid-public-key requested. Public key present:', Boolean(VAPID_PUBLIC_KEY));
   if (!VAPID_PUBLIC_KEY) {
     return res.status(503).json({
       success: false,
@@ -408,6 +430,18 @@ router.get('/vapid-public-key', (req, res) => {
   res.json({
     success: true,
     publicKey: VAPID_PUBLIC_KEY
+  });
+});
+
+// GET /api/notifications/status - Report server-side notification configuration status
+router.get('/status', (req, res) => {
+  console.log('[Notifications] /status requested. Configured:', Boolean(VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY), 'Subs:', subscriptions.size);
+  res.json({
+    success: true,
+    configured: Boolean(VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY),
+    publicKeyPresent: Boolean(VAPID_PUBLIC_KEY),
+    privateKeyPresent: Boolean(VAPID_PRIVATE_KEY),
+    subscriptionsCount: subscriptions.size
   });
 });
 

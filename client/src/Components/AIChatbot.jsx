@@ -2,8 +2,22 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaRobot, FaPaperPlane, FaTimes, FaUser, FaMicrophone, FaStop } from 'react-icons/fa';
 import { toast } from 'react-toastify';
+import { buildApiUrl } from '../config/api';
+import { useNavigate } from 'react-router-dom';
 
 const AIChatbot = ({ onClose }) => {
+  const navigate = useNavigate();
+  const handleClose = () => {
+    if (typeof onClose === 'function') {
+      onClose();
+      return;
+    }
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate('/');
+    }
+  };
   const [messages, setMessages] = useState([
     {
       id: 1,
@@ -73,23 +87,26 @@ const AIChatbot = ({ onClose }) => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/features/chatbot', {
+      console.log('[AIChat] Sending message to backend', { endpoint: buildApiUrl('/api/chatbot/ask'), message: inputMessage });
+      const response = await fetch(buildApiUrl('/api/chatbot/ask'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          message: inputMessage
+          question: inputMessage,
+          userId: (localStorage.getItem('token') ? (()=>{ try{ return JSON.parse(atob(localStorage.getItem('token').split('.')[1]||''))?.email||null }catch(_){ return null } })() : null) || 'guest'
         })
       });
 
       const data = await response.json();
+      console.log('[AIChat] Response from backend', data);
       
-      if (data.success) {
+      if (data.success && data.answer) {
         const botMessage = {
           id: Date.now() + 1,
           type: 'bot',
-          content: data.response,
+          content: data.answer,
           timestamp: new Date().toLocaleTimeString()
         };
 
@@ -107,7 +124,7 @@ const AIChatbot = ({ onClose }) => {
         setMessages(prev => [...prev, botMessage]);
       }
     } catch (error) {
-      console.error('Error sending message:', error);
+      console.error('[AIChat] Error sending message:', error);
       
       // Fallback responses for common questions
       const fallbackResponse = getFallbackResponse(inputMessage);
@@ -197,7 +214,7 @@ const AIChatbot = ({ onClose }) => {
         <motion.button
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
-          onClick={onClose}
+          onClick={handleClose}
           className="p-1 hover:bg-white hover:bg-opacity-20 rounded-lg transition-colors"
         >
           <FaTimes />

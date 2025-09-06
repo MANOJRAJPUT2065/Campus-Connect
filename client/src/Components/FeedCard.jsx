@@ -8,6 +8,7 @@ import { toast } from 'react-toastify';
 import FeedCardRight from './CommentSection';
 import FeedCardLeft from './FeedCardLeft.jsx';
 import { buildApiUrl } from '../config/api';
+import defaultImage from '../assets/default.avif';
 
 const FeedCard = ({ post, onPostUpdated }) => {
   const navigate = useNavigate();
@@ -128,7 +129,7 @@ const FeedCard = ({ post, onPostUpdated }) => {
     const fetchAuthorPic = async () => {
       if (author) {
         try {
-          const response = await axios.get(buildApiUrl(`/api/auth/getUserDetails?email=${author}`));
+          const response = await axios.get(buildApiUrl(`/api/users/auth/getUserDetails?email=${author}`));
           setAuthorPic(response.data.profilePicUrl);
         } catch (error) {
           console.error('Error fetching author pic:', error);
@@ -149,11 +150,11 @@ const FeedCard = ({ post, onPostUpdated }) => {
       <div className="flex items-center mb-4">
         <div className="w-10 h-10 rounded-full overflow-hidden mr-3">
           <img 
-            src={authorPic || '/default-avatar.png'} 
+            src={authorPic || defaultImage} 
             alt="Author" 
             className="w-full h-full object-cover"
             onError={(e) => {
-              e.target.src = '/default-avatar.png';
+              e.target.src = defaultImage;
             }}
           />
         </div>

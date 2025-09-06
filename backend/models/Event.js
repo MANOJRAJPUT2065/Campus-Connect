@@ -137,6 +137,16 @@ const eventSchema = new mongoose.Schema({
         default: 0 
     },
     
+    // Google Calendar Integration
+    googleCalendarId: {
+        type: String,
+        default: null
+    },
+    isSyncedToCalendar: {
+        type: Boolean,
+        default: false
+    },
+    
     // Timestamps
     createdAt: { 
         type: Date, 

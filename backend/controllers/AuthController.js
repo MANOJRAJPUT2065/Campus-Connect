@@ -14,16 +14,28 @@ export const signupRoute = async (req, res) => {
   
     try {
       console.log("Inside Signup Route");
+      const normalizedEmail = (email || '').trim().toLowerCase();
+      const normalizedUsn = (usn || '').trim().toLowerCase();
+
+      // Guard: prevent duplicate users
+      const existing = await User.findOne({ $or: [ { email: normalizedEmail }, { usn: normalizedUsn } ] });
+      if (existing) {
+        return res.status(409).json({ message: 'User already exists with same email or usn' });
+      }
+
       const user = new User({
-        username,
-        usn,
-        email,
+        username: (username || '').trim(),
+        usn: normalizedUsn,
+        email: normalizedEmail,
         password: hashedPassword, 
       });
       await user.save();
       res.status(201).json({ message: "User created successfully..." });
     } catch (err) {
       console.error(err);
+      if (err && err.code === 11000) {
+        return res.status(409).json({ message: 'User already exists (duplicate key)' });
+      }
       res.status(500).json({ message: "Failed to create user" });
     }
   };
@@ -57,19 +69,43 @@ export const loginRoute = async (req, res) => {
 };
 
 export const getUserDetailsRoute = async (req, res) => {
-  // console.log("Get User Details Route");
-    try {
-      const email = req.headers.authorization.split(' ')[1];
-      const user = await User.findOne({ email }).select('profilePicUrl username email usn admin'); 
+  try {
+    // Check if request is for specific user by email (for post author lookup)
+    if (req.query.email) {
+      const user = await User.findOne({ email: req.query.email }).select('profilePicUrl username email usn admin'); 
       if (!user) {
         return res.status(404).json({ message: 'User not found' });
       }
-      res.json({ profilePicUrl: user.profilePicUrl ,username: user.username, usn: user.usn, admin: user.admin});
-    } catch (error) {
-      console.error('Error fetching user details:', error);
-      res.status(500).json({ message: 'Server error' });
+      return res.json({ profilePicUrl: user.profilePicUrl, username: user.username, usn: user.usn, admin: user.admin });
     }
-  };
+
+    // Otherwise, get user from token
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ message: 'Authorization header missing or invalid' });
+    }
+    
+    const token = authHeader.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ message: 'Token missing' });
+    }
+
+    // Decode the token to get user info
+    const decoded = jwt.verify(token, jwtKey);
+    const user = await User.findOne({ email: decoded.email }).select('profilePicUrl username email usn admin'); 
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.json({ profilePicUrl: user.profilePicUrl, username: user.username, usn: user.usn, admin: user.admin });
+  } catch (error) {
+    console.error('Error fetching user details:', error);
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({ message: 'Invalid token' });
+    }
+    res.status(500).json({ message: 'Server error' });
+  }
+};
 
   export const getAllUsersRoute = async (req, res) => {
     try {

@@ -14,6 +14,17 @@ import videocallRoute from './routes/videocall.js';
 import chatbotRoute from './routes/chatbot.js';
 import notificationsRoute from './routes/notifications.js';
 import advancedFeaturesRoute from './routes/advanced-features.js';
+import voiceRoute from './routes/voice.js';
+import likePostRoute from './routes/LikePostRoute.js';
+import bookmarkRoute from './routes/BookmarkRoute.js';
+import commentRoute from './routes/CommentRoute.js';
+import messageRoute from './routes/MessageRoute.js';
+import notesRoute from './routes/NotesRoute.js';
+import noticesRoute from './routes/notices.js';
+import quizRoute from './routes/quiz.js';
+import calendarSyncRoute from './routes/calendar-sync.js';
+import lectureRecordingsRoute from './routes/lecture-recordings.js';
+import recommendationsRoute from './routes/recommendations.js';
 
 // Load environment variables
 dotenv.config();
@@ -34,17 +45,28 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+// Lightweight request logger for key APIs
+app.use((req, res, next) => {
+  try {
+    const interesting = ['/api/voice', '/api/chatbot', '/api/notifications', '/api/videocall'];
+    if (interesting.some((p) => req.path.startsWith(p))) {
+      console.log(`[API] ${new Date().toISOString()} ${req.method} ${req.originalUrl}`);
+    }
+  } catch (_) {}
+  next();
+});
+
 // Static files
 app.use('/uploads', express.static('uploads'));
 
 // Database connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/meta-verse')
+mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('✅ Connected to MongoDB'))
   .catch((err) => console.error('❌ MongoDB connection error:', err));
 
 // Routes
 app.use('/api/users', userRoute);
-app.use('/api/post', postRoute);
+app.use('/api/posts', postRoute);
 app.use('/events', EventRoute);
 app.use('/api/contact', contactRoute);
 
@@ -53,6 +75,21 @@ app.use('/api/videocall', videocallRoute);
 app.use('/api/chatbot', chatbotRoute);
 app.use('/api/notifications', notificationsRoute);
 app.use('/api/advanced-features', advancedFeaturesRoute);
+app.use('/api/voice', voiceRoute);
+
+// Additional Routes
+app.use('/api/likes', likePostRoute);
+app.use('/api/bookmarks', bookmarkRoute);
+app.use('/api/comments', commentRoute);
+app.use('/api/messages', messageRoute);
+app.use('/api/notes', notesRoute);
+app.use('/api/notices', noticesRoute);
+app.use('/api/quiz', quizRoute);
+
+// New Advanced Features - Now Enabled
+app.use('/api/calendar', calendarSyncRoute);
+app.use('/api/recordings', lectureRecordingsRoute);
+app.use('/api/recommendations', recommendationsRoute);
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {
@@ -159,7 +196,7 @@ app.get('/health', (req, res) => {
 // API documentation endpoint
 app.get('/api', (req, res) => {
   res.json({
-    message: 'Meta-Verse API is running! 🚀',
+    message: 'Campus Connect API is running! 🚀',
     version: '2.0.0',
     features: [
       'User Management',
@@ -173,7 +210,10 @@ app.get('/api', (req, res) => {
       'Live Polls & Quizzes',
       'Attendance Tracking',
       'Breakout Rooms',
-      'Advanced Analytics'
+      'Advanced Analytics',
+      'Code Editor & Quiz Platform',
+      'Google Calendar Sync',
+      'Lecture Recordings'
     ],
     endpoints: {
       users: '/api/users',
@@ -183,7 +223,10 @@ app.get('/api', (req, res) => {
       videocall: '/api/videocall',
       chatbot: '/api/chatbot',
       notifications: '/api/notifications',
-      advancedFeatures: '/api/advanced-features'
+      advancedFeatures: '/api/advanced-features',
+      calendar: '/api/calendar',
+      recordings: '/api/recordings',
+      recommendations: '/api/recommendations'
     }
   });
 });
@@ -210,7 +253,7 @@ app.use('*', (req, res) => {
 const PORT = process.env.PORT || 7071;
 
 server.listen(PORT, () => {
-  console.log("✅ Server is running on port", PORT);
+  console.log("✅ Campus Connect Server is running on port", PORT);
   console.log("🌐 API Documentation: http://localhost:" + PORT + "/api");
   console.log("💚 Health Check: http://localhost:" + PORT + "/health");
   console.log("⚠️  Note: Some features require API keys (check env-example.txt)");

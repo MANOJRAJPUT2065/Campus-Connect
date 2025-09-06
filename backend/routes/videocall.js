@@ -25,7 +25,8 @@ router.post('/generate-token', (req, res) => {
     if (!AGORA_APP_ID || !AGORA_APP_CERTIFICATE) {
       return res.status(503).json({
         success: false,
-        error: 'Agora video calling is not configured'
+        error: 'Agora video calling is not configured. Please check environment variables.',
+        message: 'Video calling service temporarily unavailable'
       });
     }
 

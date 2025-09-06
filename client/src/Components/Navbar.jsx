@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { FaUser, FaSignOutAlt, FaBell, FaSearch, FaBars, FaTimes } from 'react-icons/fa';
 import { buildApiUrl } from '../config/api';
 import axios from 'axios';
-
+import Notices from '../Pages/Notices';
 const Navbar = () => {
   const [user, setUser] = useState(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -13,13 +13,23 @@ const Navbar = () => {
   useEffect(() => {
     const fetchUserDetails = async () => {
       try {
-        const response = await axios.get(buildApiUrl('/api/auth/getUserDetails'), {
-          withCredentials: true
+        const token = localStorage.getItem('token');
+        if (!token) {
+          setUser(null);
+          return;
+        }
+
+        const response = await axios.get(buildApiUrl('/api/users/auth/getUserDetails'), {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
         });
         setUser(response.data);
       } catch (error) {
         console.error('Error fetching user details:', error);
-        // Handle error appropriately
+        // Clear invalid token
+        localStorage.removeItem('token');
+        setUser(null);
       }
     };
 
@@ -51,7 +61,7 @@ const Navbar = () => {
           {/* Logo/Brand */}
           <div className="flex items-center">
             <Link to="/" className="text-2xl font-bold text-blue-600">
-              MetaVerse
+              Campus Connect ⭐
             </Link>
           </div>
 
@@ -79,7 +89,7 @@ const Navbar = () => {
             <Link to="/events" className="text-gray-700 hover:text-blue-600 transition-colors">
               Events
             </Link>
-            <Link to="/video-call" className="text-gray-700 hover:text-blue-600 transition-colors">
+            <Link to="/online-classes" className="text-gray-700 hover:text-blue-600 transition-colors">
               Video Call
             </Link>
             <Link to="/ai-chatbot" className="text-gray-700 hover:text-blue-600 transition-colors">
@@ -88,6 +98,18 @@ const Navbar = () => {
             <Link to="/notifications" className="text-gray-700 hover:text-blue-600 transition-colors">
               <FaBell className="text-xl" />
             </Link>
+              <Link to="/notices" className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                 Notices 
+                </Link>
+              <Link to="/quiz" className="text-gray-700 hover:text-blue-600 transition-colors">
+                Quiz
+              </Link>
+              <Link to="/code-editor" className="text-gray-700 hover:text-blue-600 transition-colors">
+                Code Editor
+              </Link>
+              <Link to="/chat" className="text-gray-700 hover:text-blue-600 transition-colors">
+                Chat
+              </Link> 
           </div>
 
           {/* User Menu - Desktop */}
@@ -95,21 +117,25 @@ const Navbar = () => {
             {user ? (
               <div className="flex items-center space-x-4">
                 <div className="text-right">
-                  <p className="text-sm font-medium text-gray-900">{user.name || user.username}</p>
+                  <p className="text-sm font-medium text-gray-900">{user.username}</p>
                   <p className="text-xs text-gray-500">{user.email}</p>
                 </div>
                 <div className="relative group">
                   <button className="flex items-center space-x-2 text-gray-700 hover:text-blue-600 transition-colors">
-                    <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-                      <FaUser className="text-white text-sm" />
-                    </div>
+                    {user.profilePicUrl ? (
+                      <img src={user.profilePicUrl} alt="avatar" className="w-8 h-8 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                        <FaUser className="text-white text-sm" />
+                      </div>
+                    )}
                   </button>
                   {/* Dropdown Menu */}
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
-                    <Link to="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                    <Link to={`/account/${encodeURIComponent(user.email)}`} className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                       Profile
                     </Link>
-                    <Link to="/account" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                    <Link to={`/account/${encodeURIComponent(user.email)}`} className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                       Account Settings
                     </Link>
                     <button
@@ -129,6 +155,7 @@ const Navbar = () => {
                 <Link to="/signup" className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
                   Sign Up
                 </Link>
+               
               </div>
             )}
           </div>
@@ -178,7 +205,7 @@ const Navbar = () => {
                 Events
               </Link>
               <Link
-                to="/video-call"
+                to="/online-classes"
                 className="block px-3 py-2 text-gray-700 hover:text-blue-600 transition-colors"
                 onClick={() => setIsMenuOpen(false)}
               >
@@ -203,7 +230,7 @@ const Navbar = () => {
               {user ? (
                 <div className="border-t pt-4 mt-4">
                   <div className="px-3 py-2">
-                    <p className="text-sm font-medium text-gray-900">{user.name || user.username}</p>
+                    <p className="text-sm font-medium text-gray-900">{user.username}</p>
                     <p className="text-xs text-gray-500">{user.email}</p>
                   </div>
                   <Link

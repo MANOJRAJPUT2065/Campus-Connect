@@ -13,13 +13,28 @@ router.post('/', async (req, res) => {
 
   if (!eventId || !userId || !name || !email || !phone) {
     console.log('Missing required fields');
-    return res.status(400).json({ message: 'Missing required fields' });
+    return res.status(400).json({ 
+      success: false,
+      message: 'Missing required fields: eventId, userId, name, email, phone' 
+    });
   }
 
   try {
+    // Validate event exists
+    const event = await Event.findById(eventId);
+    if (!event) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Event not found' 
+      });
+    }
+
     const existing = await EventRegistration.findOne({ eventId, userId });
     if (existing) {
-      return res.status(409).json({ message: 'User already registered for this event' });
+      return res.status(409).json({ 
+        success: false,
+        message: 'User already registered for this event' 
+      });
     }
 
     const registration = await EventRegistration.create({
@@ -31,10 +46,18 @@ router.post('/', async (req, res) => {
     });
 
     console.log('Registration created:', registration);
-    res.status(201).json({ message: 'Registered successfully', registration });
+    res.status(201).json({ 
+      success: true,
+      message: 'Registered successfully', 
+      registration 
+    });
   } catch (err) {
     console.error('Error registering user:', err); // Very important to log the error
-    res.status(500).json({ message: 'Error registering user', error: err.message });
+    res.status(500).json({ 
+      success: false,
+      message: 'Error registering user', 
+      error: err.message 
+    });
   }
 });
 

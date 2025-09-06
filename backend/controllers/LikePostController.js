@@ -46,9 +46,12 @@ export const UnlikeRoute = async (req, res) => {
 
 export const getRoute = async (req, res) => {
   try {
-    const { postId } = req.params;
+    const { postId } = req.query; // Changed from req.params to req.query
+    if (!postId) {
+      return res.status(400).json({ message: 'Post ID is required' });
+    }
+    
     const likes = await Like.find({ postId });
-
     res.status(200).json(likes);
   } catch (error) {
     console.error('Error fetching likes:', error);
