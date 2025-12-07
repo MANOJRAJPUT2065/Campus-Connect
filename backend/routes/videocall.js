@@ -73,10 +73,10 @@ router.post('/generate-token', (req, res) => {
   }
 });
 
-// Create a new video call session
+// Create a new video call session with shareable link
 router.post('/create-session', (req, res) => {
   try {
-    const { title, instructorId, maxParticipants = 50, settings = {} } = req.body;
+    const { title, instructorId, instructorName, maxParticipants = 50, settings = {} } = req.body;
     
     if (!title || !instructorId) {
       return res.status(400).json({
@@ -86,15 +86,18 @@ router.post('/create-session', (req, res) => {
     }
 
     const sessionId = uuidv4();
-    const channelName = `class-${sessionId}`;
+    const channelName = `room-${sessionId.substring(0, 8)}`;
+    const shareLink = `${process.env.CLIENT_URL || 'http://localhost:5173'}/video-call/join/${sessionId}`;
     
     const session = {
       id: sessionId,
       title,
       channelName,
       instructorId,
+      instructorName: instructorName || 'Instructor',
       maxParticipants,
       participants: [],
+      shareLink,
       settings: {
         allowScreenShare: true,
         allowRecording: true,
@@ -113,6 +116,7 @@ router.post('/create-session', (req, res) => {
     res.json({
       success: true,
       session,
+      shareLink,
       message: 'Session created successfully'
     });
 
@@ -176,22 +180,29 @@ router.post('/join-session', (req, res) => {
 
     session.participants.push(participant);
 
-    // Generate token for this participant
-    const token = RtcTokenBuilder.buildTokenWithUid(
-      AGORA_APP_ID,
-      AGORA_APP_CERTIFICATE,
-      session.channelName,
-      participant.userId,
-      userRole === 'instructor' ? RtcRole.PUBLISHER : RtcRole.SUBSCRIBER,
-      Math.floor(Date.now() / 1000) + 3600 * 24
-    );
+    // Generate token for this participant (if Agora is configured)
+    let token = null;
+    if (AGORA_APP_ID && AGORA_APP_CERTIFICATE) {
+      try {
+        token = RtcTokenBuilder.buildTokenWithUid(
+          AGORA_APP_ID,
+          AGORA_APP_CERTIFICATE,
+          session.channelName,
+          participant.userId,
+          userRole === 'instructor' ? RtcRole.PUBLISHER : RtcRole.SUBSCRIBER,
+          Math.floor(Date.now() / 1000) + 3600 * 24
+        );
+      } catch (tokenError) {
+        console.error('Token generation error:', tokenError);
+      }
+    }
 
     res.json({
       success: true,
       session,
       participant,
-      token,
-      appId: AGORA_APP_ID,
+      token: token || 'mock-token-for-testing',
+      appId: AGORA_APP_ID || 'mock-app-id',
       channelName: session.channelName,
       message: 'Successfully joined session'
     });
@@ -256,7 +267,7 @@ router.post('/leave-session', (req, res) => {
   }
 });
 
-// Get session details
+// Get session details by sessionId (for joining via link)
 router.get('/session/:sessionId', (req, res) => {
   try {
     const { sessionId } = req.params;
@@ -265,13 +276,31 @@ router.get('/session/:sessionId', (req, res) => {
     if (!session) {
       return res.status(404).json({
         success: false,
-        error: 'Session not found'
+        error: 'Session not found or expired'
+      });
+    }
+
+    // Check if session is still active
+    if (session.status === 'ended') {
+      return res.status(400).json({
+        success: false,
+        error: 'This session has ended'
       });
     }
 
     res.json({
       success: true,
-      session
+      session: {
+        id: session.id,
+        title: session.title,
+        channelName: session.channelName,
+        instructorName: session.instructorName,
+        maxParticipants: session.maxParticipants,
+        participants: session.participants.length,
+        status: session.status,
+        createdAt: session.createdAt,
+        settings: session.settings
+      }
     });
 
   } catch (error) {

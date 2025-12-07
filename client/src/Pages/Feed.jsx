@@ -35,7 +35,7 @@ const Feed = () => {
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 border-t-transparent"></div>
       </div>
     );
   }
@@ -44,10 +44,10 @@ const Feed = () => {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <div className="text-center">
-          <p className="text-red-600 mb-4">{error}</p>
+          <p className="text-red-400 mb-4">{error}</p>
           <button 
             onClick={fetchPosts}
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
           >
             Retry
           </button>
@@ -57,7 +57,7 @@ const Feed = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 py-8">
+    <div className="min-h-screen py-8">
       <div className="max-w-4xl mx-auto px-4">
         {/* Add Post Section */}
         <div className="mb-8">
@@ -68,7 +68,7 @@ const Feed = () => {
         <div className="space-y-6">
           {posts.length === 0 ? (
             <div className="text-center py-12">
-              <p className="text-gray-500 text-lg">No posts yet. Be the first to share something!</p>
+              <p className="text-gray-400 text-lg">No posts yet. Be the first to share something!</p>
             </div>
           ) : (
             posts.map((post) => (

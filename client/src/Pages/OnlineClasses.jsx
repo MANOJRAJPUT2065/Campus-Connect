@@ -4,6 +4,7 @@ import { FaVideo, FaUsers, FaCalendar, FaClock, FaPlay, FaStop, FaMicrophone, Fa
 import VideoCall from '../Components/VideoCall';
 import PushNotifications from '../Components/PushNotifications';
 import { toast } from 'react-toastify';
+import { buildApiUrl } from '../config/api';
 
 const OnlineClasses = () => {
   const [classes, setClasses] = useState([
@@ -62,15 +63,92 @@ const OnlineClasses = () => {
   }, []);
 
   const joinClass = (classItem) => {
-    setSelectedClass(classItem);
-    setShowVideoCall(true);
+    // Create session if it doesn't exist, then join
+    createAndJoinSession(classItem);
   };
 
-  const startClass = (classItem) => {
+  const createAndJoinSession = async (classItem) => {
+    try {
+      const token = localStorage.getItem('token');
+      let userInfo = null;
+      if (token) {
+        try {
+          const decoded = JSON.parse(atob(token.split('.')[1]));
+          userInfo = {
+            userId: decoded.email || decoded.usn,
+            userName: decoded.username || 'User'
+          };
+        } catch (e) {}
+      }
+
+      // Create session
+      const response = await fetch(buildApiUrl('/api/videocall/create-session'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: classItem.title,
+          instructorId: userInfo?.userId || 'instructor',
+          instructorName: userInfo?.userName || 'Instructor',
+          maxParticipants: classItem.maxParticipants || 50
+        })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        // Navigate to join page with session ID
+        window.location.href = `/video-call/join/${data.session.id}`;
+      } else {
+        toast.error('Failed to create session');
+      }
+    } catch (err) {
+      console.error('Error creating session:', err);
+      toast.error('Failed to create session');
+    }
+  };
+
+  const startClass = async (classItem) => {
     if (isInstructor) {
-      setSelectedClass(classItem);
-      setShowVideoCall(true);
-      toast.success(`Starting class: ${classItem.title}`);
+      try {
+        const token = localStorage.getItem('token');
+        let userInfo = null;
+        if (token) {
+          try {
+            const decoded = JSON.parse(atob(token.split('.')[1]));
+            userInfo = {
+              userId: decoded.email || decoded.usn,
+              userName: decoded.username || 'Instructor'
+            };
+          } catch (e) {}
+        }
+
+        // Create session for instructor
+        const response = await fetch(buildApiUrl('/api/videocall/create-session'), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            title: classItem.title,
+            instructorId: userInfo?.userId || 'instructor',
+            instructorName: userInfo?.userName || 'Instructor',
+            maxParticipants: classItem.maxParticipants || 50
+          })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          // Navigate to video call with session info
+          window.location.href = `/video-call/join/${data.session.id}`;
+          toast.success(`Starting class: ${classItem.title}`);
+        } else {
+          toast.error('Failed to create session');
+        }
+      } catch (err) {
+        console.error('Error starting class:', err);
+        toast.error('Failed to start class');
+      }
     } else {
       toast.error('Only instructors can start classes');
     }

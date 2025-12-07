@@ -105,7 +105,7 @@ const AddPostForm = () => {
             </label>
             <button
               type="submit"
-              className="mt-6 w-full btn btn-sm btn-accent text-white font-semibold py-2 rounded-mdtransition duration-200"
+              className="mt-6 w-full btn btn-sm btn-accent text-white font-semibold py-2 rounded-md transition duration-200"
             >
               Add Post
             </button>

@@ -4,6 +4,11 @@ import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import http from 'http';
 import { Server } from 'socket.io';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Import routes
 import userRoute from './routes/UserRoute.js';
@@ -64,7 +69,7 @@ mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('✅ Connected to MongoDB'))
   .catch((err) => console.error('❌ MongoDB connection error:', err));
 
-// Routes
+// Routes - MUST be before static file serving in production
 app.use('/api/users', userRoute);
 app.use('/api/posts', postRoute);
 app.use('/events', EventRoute);
@@ -90,6 +95,25 @@ app.use('/api/quiz', quizRoute);
 app.use('/api/calendar', calendarSyncRoute);
 app.use('/api/recordings', lectureRecordingsRoute);
 app.use('/api/recommendations', recommendationsRoute);
+
+// Serve static files from React app in production - MUST be after all API routes
+if (process.env.NODE_ENV === 'production') {
+  const clientPath = path.join(__dirname, '../client/dist');
+  app.use(express.static(clientPath));
+  
+  // Handle React routing - return all non-API requests to React app
+  app.get('*', (req, res) => {
+    // Don't serve React app for API routes
+    if (req.path.startsWith('/api') || req.path.startsWith('/events')) {
+      return res.status(404).json({
+        success: false,
+        message: 'API route not found',
+        path: req.originalUrl
+      });
+    }
+    res.sendFile(path.join(clientPath, 'index.html'));
+  });
+}
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {
@@ -241,14 +265,16 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({
-    success: false,
-    message: 'Route not found',
-    path: req.originalUrl
+// 404 handler (only for API routes in development, production handles React routing)
+if (process.env.NODE_ENV !== 'production') {
+  app.use('*', (req, res) => {
+    res.status(404).json({
+      success: false,
+      message: 'Route not found',
+      path: req.originalUrl
+    });
   });
-});
+}
 
 const PORT = process.env.PORT || 7071;
 

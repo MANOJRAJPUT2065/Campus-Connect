@@ -4,7 +4,7 @@ import axios from "axios";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
-import BASE_API from '../api.js';
+import { buildApiUrl } from '../config/api';
 import TimeAgo from 'react-timeago';
 import defaultImage from '../assets/default.avif';
 
@@ -19,9 +19,7 @@ const FeedCard = ({ title, content, image, author, username, createdAt, onRemove
   useEffect(() => {
     const fetchUserDetails = async () => {
       try {
-        // const response = await axios.get(`${BASE_API}/auth/getUserDetails`, {
-          const response = await axios.get(`http://localhost:7071/auth/getUserDetails`, {
-          //http://localhost:7071
+        const response = await axios.get(buildApiUrl('/api/users/auth/getUserDetails'), {
           headers: {
             'Authorization': `Bearer ${author}`
           }

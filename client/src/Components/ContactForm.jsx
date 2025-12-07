@@ -1,5 +1,6 @@
 // src/components/ContactForm.jsx
 import { useState } from 'react';
+import { buildApiUrl } from '../config/api';
 
 export default function ContactForm() {
   const [formData, setFormData] = useState({
@@ -21,7 +22,7 @@ export default function ContactForm() {
     setResponse('');
 
     try {
-      const res = await fetch('http://localhost:5000/api/contact', {
+      const res = await fetch(buildApiUrl('/api/contact'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

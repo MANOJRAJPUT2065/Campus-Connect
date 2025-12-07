@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import BASE_API from '../api';
+import { buildApiUrl } from '../config/api';
 import { jwtDecode } from 'jwt-decode';
 import defaultImage from '../assets/default.avif'
 
@@ -15,9 +15,7 @@ const FriendsList = () => {
 
   useEffect(() => {
     if (userData && userData.email) {
-      // axios.get(`${BASE_API}/auth/getAllUsers`, {
-        axios.get(`http://localhost:7071/auth/getAllUsers`, {
-        //http://localhost:7071
+      axios.get(buildApiUrl('/api/users/auth/getAllUsers'), {
         headers: {
           'Authorization': `Bearer ${token}`,
         },

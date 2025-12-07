@@ -217,7 +217,7 @@
 /* eslint-disable no-unused-vars */
 import { useState } from 'react';
 import axios from 'axios';
-import BASE_API from '../api';
+import { buildApiUrl } from '../config/api';
 import { toast } from 'react-toastify';
 
 const EventForm = () => {
@@ -241,7 +241,7 @@ const EventForm = () => {
     e.preventDefault();
 
     try {
-      const res = await axios.post('http://localhost:7071/events/addEvent', formData, {
+      const res = await axios.post(buildApiUrl('/events/addEvent'), formData, {
         headers: {
           'Content-Type': 'application/json'
         }

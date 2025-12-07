@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import AgoraRTC from 'agora-rtc-sdk-ng';
-import { FaMicrophone, FaMicrophoneSlash, FaVideo, FaVideoSlash, FaPhoneSlash, FaDesktop, FaDownload, FaShare, FaExpand, FaCompress, FaRobot, FaVolumeUp } from 'react-icons/fa';
+import { FaMicrophone, FaMicrophoneSlash, FaVideo, FaVideoSlash, FaPhoneSlash, FaDesktop, FaDownload, FaShare, FaExpand, FaCompress, FaRobot, FaVolumeUp, FaCopy, FaCheck, FaTimes } from 'react-icons/fa';
 import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
 import API_CONFIG, { buildApiUrl } from '../config/api';
 import { io } from 'socket.io-client';
 import { useEffect as ReactUseEffect } from 'react';
 
-const VideoCall = ({ channelName, onClose }) => {
+const VideoCall = ({ channelName, onClose, sessionId, roomTitle }) => {
   const [users, setUsers] = useState([]);
   const [start, setStart] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -32,11 +32,27 @@ const VideoCall = ({ channelName, onClose }) => {
   const [aiReply, setAiReply] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [listenLevel, setListenLevel] = useState(0);
+  const [shareLink, setShareLink] = useState('');
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const recognitionRef = useRef(null);
   const listenStreamRef = useRef(null);
   const audioCtxRef = useRef(null);
   const analyserRef = useRef(null);
   const rafRef = useRef(null);
+
+  // Copy to clipboard function
+  const copyToClipboard = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setLinkCopied(true);
+      toast.success('Link copied to clipboard!');
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+      toast.error('Failed to copy link');
+    }
+  };
 
   // Guards to prevent duplicate init under React StrictMode/dev
   const tokenRequestedRef = useRef(false);
@@ -48,6 +64,18 @@ const VideoCall = ({ channelName, onClose }) => {
   const localAudioTrackRef = useRef(null);
   const localVideoTrackRef = useRef(null);
   const socketRef = useRef(null);
+
+  // Generate share link
+  useEffect(() => {
+    if (sessionId) {
+      const link = `${window.location.origin}/video-call/join/${sessionId}`;
+      setShareLink(link);
+    } else if (channelName) {
+      // For backward compatibility, create a link from channel name
+      const link = `${window.location.origin}/video-call?room=${channelName}`;
+      setShareLink(link);
+    }
+  }, [sessionId, channelName]);
 
   // Get Agora configuration from backend
   useEffect(() => {
@@ -576,7 +604,7 @@ const VideoCall = ({ channelName, onClose }) => {
           const a = document.createElement('a');
           const ts = new Date().toISOString().replace(/[:.]/g, '-');
           a.href = url;
-          a.download = `metaverse-recording-${ts}.webm`;
+          a.download = `campus-connect-recording-${ts}.webm`;
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
@@ -699,20 +727,95 @@ const VideoCall = ({ channelName, onClose }) => {
       <div className="absolute top-0 left-0 right-0 z-10 bg-black bg-opacity-50 backdrop-blur-sm p-4">
         <div className="flex items-center justify-between text-white">
           <div className="flex items-center space-x-3">
-            <h1 className="text-xl font-bold">Video Call</h1>
+            <h1 className="text-xl font-bold">{roomTitle || 'Video Call'}</h1>
             <span className="bg-green-500 text-white px-2 py-1 rounded-full text-sm">
               {participantCount} Participants
             </span>
           </div>
-          <button
-            onClick={leaveCall}
-            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-semibold transition-colors flex items-center space-x-2"
-          >
-            <FaPhoneSlash />
-            <span>Leave Call</span>
-          </button>
+          <div className="flex items-center space-x-3">
+            {/* Share Link Button */}
+            {shareLink && (
+              <button
+                onClick={() => {
+                  setShowShareModal(true);
+                  copyToClipboard(shareLink);
+                }}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold transition-colors flex items-center space-x-2"
+                title="Share meeting link"
+              >
+                <FaShare />
+                <span className="hidden md:inline">Share</span>
+              </button>
+            )}
+            <button
+              onClick={leaveCall}
+              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-semibold transition-colors flex items-center space-x-2"
+            >
+              <FaPhoneSlash />
+              <span>Leave Call</span>
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Share Link Modal */}
+      {showShareModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75">
+          <div className="bg-gray-900 rounded-lg p-6 max-w-md w-full mx-4 border border-gray-700">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-white">Share Meeting Link</h3>
+              <button
+                onClick={() => setShowShareModal(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                <FaTimes />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <p className="text-gray-300 text-sm">Copy this link and share it with others to join the meeting:</p>
+              <div className="flex items-center space-x-2 bg-gray-800 p-3 rounded-lg">
+                <input
+                  type="text"
+                  value={shareLink}
+                  readOnly
+                  className="flex-1 bg-transparent text-white text-sm focus:outline-none"
+                />
+                <button
+                  onClick={() => copyToClipboard(shareLink)}
+                  className="p-2 bg-blue-600 hover:bg-blue-700 rounded transition-colors"
+                  title="Copy link"
+                >
+                  {linkCopied ? <FaCheck className="text-green-400" /> : <FaCopy className="text-white" />}
+                </button>
+              </div>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => {
+                    if (navigator.share) {
+                      navigator.share({
+                        title: roomTitle || 'Video Call',
+                        text: `Join my video call: ${roomTitle || 'Video Call'}`,
+                        url: shareLink
+                      });
+                    } else {
+                      copyToClipboard(shareLink);
+                    }
+                  }}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+                >
+                  Share via...
+                </button>
+                <button
+                  onClick={() => setShowShareModal(false)}
+                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
              {/* Main Video Area */}
        <div className="pt-20 pb-32 px-4">

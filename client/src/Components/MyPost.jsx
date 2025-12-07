@@ -113,7 +113,7 @@ import axios from 'axios';
 // import { jwtDecode } from 'jwt-decode';
 import MyPostsCard from './FeedCardLeft2.jsx';
 import { toast } from 'react-toastify';
-import BASE_API from '../api.js'
+import { buildApiUrl } from '../config/api';
 
 const MyPost = (props) => {
   const { email } = props;
@@ -134,9 +134,7 @@ const MyPost = (props) => {
   }, [posts, email]);
 
   const fetchPosts = async () => {
-    // axios.get(`${BASE_API}/post/getposts`)
-    axios.get(`http://localhost:7071/post/getposts`)
-    // http://localhost:7071
+    axios.get(buildApiUrl('/api/posts/getposts'))
       .then(response => {
         setPosts(response.data.reverse());
       })
@@ -146,9 +144,7 @@ const MyPost = (props) => {
   };
 
   const handleRemovePost = (postId) => {
-    // axios.delete(`${BASE_API}/post/deletepost/${postId}`)
-    axios.delete(`http://localhost:7071/api/posts/deletepost/${postId}`)
-    //http://localhost:7071
+    axios.delete(buildApiUrl(`/api/posts/deletepost/${postId}`))
       .then(() => {
         setPosts(posts.filter(post => post._id !== postId));
         setShowDeleteModal(false);

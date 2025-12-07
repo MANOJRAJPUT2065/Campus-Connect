@@ -5,12 +5,12 @@ import axios from 'axios';
 import { useParams, useNavigate } from 'react-router-dom';
 import {jwtDecode} from 'jwt-decode';
 import io from 'socket.io-client';
-import BASE_API from '../../api';
+import { buildApiUrl } from '../../config/api';
 import FriendsList from '../../Components/FriendsList';
 import './Message.css';
 import defaultImage from '../../assets/default.avif';
 
-const socket = io(BASE_API);
+const socket = io(import.meta.env.VITE_API_URL || 'http://localhost:7071');
 
 const MessageSection = () => {
   const navigate = useNavigate();
@@ -31,9 +31,7 @@ const MessageSection = () => {
   }, [messages]);
 
   useEffect(() => {
-    // axios.get(`${BASE_API}/auth/getUserDetails`, {
-      axios.get(`http://localhost:7071/auth/getUserDetails`, {
-      //http://localhost:7071
+    axios.get(buildApiUrl('/api/users/auth/getUserDetails'), {
       headers: {
         Authorization: `Bearer ${recieverId}`
       }
@@ -49,7 +47,7 @@ const MessageSection = () => {
 
   useEffect(() => {
     if (userEmail && recieverId) {
-      axios.get(`http://localhost:7071/messages/getMessages/${userEmail}/${recieverId}`)
+      axios.get(buildApiUrl(`/api/messages/getMessages/${userEmail}/${recieverId}`))
       .then(response => {
         setMessages(response.data);
       })

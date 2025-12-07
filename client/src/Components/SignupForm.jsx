@@ -92,7 +92,7 @@ import { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import BASE_API from '../api.js'
+import { buildApiUrl } from '../config/api';
 
 
 const SignupForm = () => {
@@ -132,8 +132,7 @@ const SignupForm = () => {
       return;
     }
     try {
-      // await axios.post(`${BASE_API}/auth/signup`, {
-        await axios.post(`http://localhost:7071/api/users/auth/signup`, {
+      await axios.post(buildApiUrl('/api/users/auth/signup'), {
         username,
         usn,
         email,
@@ -141,12 +140,12 @@ const SignupForm = () => {
       });
       toast.success('Signup successful!');
       setTimeout(() => {
-        navigate('/');
-        document.getElementById('my_modal_1').close();
-        document.getElementById('my_modal_2').show();
+        navigate('/login');
       }, 1000);
     } catch (err) {
       console.error(err);
+      const errorMsg = err.response?.data?.message || err.response?.data?.error || 'Signup failed. Please try again.';
+      toast.error(errorMsg);
     }
   };
 

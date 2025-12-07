@@ -1,5 +1,5 @@
 // Service Worker for Push Notifications
-const CACHE_NAME = 'meta-verse-v1';
+const CACHE_NAME = 'campus-connect-v1';
 const urlsToCache = [
   '/',
   '/online-classes',
@@ -16,16 +16,21 @@ self.addEventListener('install', (event) => {
         return cache.addAll(urlsToCache);
       })
   );
+  self.skipWaiting();
 });
 
 // Fetch event - serve from cache if available
 self.addEventListener('fetch', (event) => {
+  const req = event.request;
+  const url = new URL(req.url);
+
+  // Only handle same-origin GET requests. Let all others pass through.
+  if (req.method !== 'GET' || url.origin !== self.location.origin) {
+    return; // do not call respondWith
+  }
+
   event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        // Return cached version or fetch from network
-        return response || fetch(event.request);
-      })
+    caches.match(req).then((resp) => resp || fetch(req))
   );
 });
 
@@ -34,10 +39,10 @@ self.addEventListener('push', (event) => {
   console.log('Push event received:', event);
   
   let notificationData = {
-    title: 'Meta-Verse Notification',
+    title: 'Campus Connect Notification',
     body: 'You have a new notification',
-    icon: '/favicon.ico',
-    badge: '/favicon.ico',
+    icon: '/icon-192x192.png',
+    badge: '/badge-72x72.png',
     data: {
       url: '/online-classes'
     }
@@ -84,9 +89,19 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
   if (event.action === 'view' || event.action === undefined) {
-    // Open the app or specific page
+    const targetUrl = event.notification.data?.url || '/';
     event.waitUntil(
-      clients.openWindow(event.notification.data?.url || '/online-classes')
+      clients.matchAll({ type: 'window' }).then((clientList) => {
+        for (const client of clientList) {
+          if ('focus' in client) {
+            client.navigate(targetUrl);
+            return client.focus();
+          }
+        }
+        if (clients.openWindow) {
+          return clients.openWindow(targetUrl);
+        }
+      })
     );
   }
 });
@@ -124,6 +139,6 @@ self.addEventListener('activate', (event) => {
           }
         })
       );
-    })
+    }).then(() => self.clients.claim())
   );
 });

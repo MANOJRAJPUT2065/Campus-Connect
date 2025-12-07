@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import SavedPostCard from "./FeedCardLeft2.jsx";
-import BASE_API from '../api.js'
+import { buildApiUrl } from '../config/api';
 
 const SavedPosts = (props) => {
     const { userEmail } = props;
@@ -11,9 +11,7 @@ const SavedPosts = (props) => {
     useEffect(() => {
         const fetchBookmarks = async () => {
             try {
-                // const response = await axios.get(`${BASE_API}/bookmark/${userEmail}`);
-                const response = await axios.get(`http://localhost:7071/bookmark/${userEmail}`);
-                //http://localhost:7071
+                const response = await axios.get(buildApiUrl(`/api/bookmarks/${userEmail}`));
                 const bookmarks = response.data;
                 setSavedPosts(bookmarks);
             } catch (error) {

@@ -1,10 +1,10 @@
-
+import { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
-import { useState } from 'react';
 
+// Components
 import Navbar from './Components/Navbar';
 import Feed from './Pages/Feed';
 import Events from './Pages/Events';
@@ -19,55 +19,55 @@ import VideoCall from './Components/VideoCall';
 import AIChatbot from './Components/AIChatbot';
 import PushNotifications from './Components/PushNotifications';
 import { jwtDecode } from 'jwt-decode';
-import SignupForm from '../src/Components/SignupForm';
-import LoginForm from '../src/Components/Login';
+import SignupForm from './Components/SignupForm';
+import LoginForm from './Components/Login';
 import QuizPlatform from './Components/QuizPlatform';
 import CodeEditor from './Components/CodeEditor';
 import ChatSystem from './Components/ChatSystem';
+import JoinVideoCall from './Pages/JoinVideoCall';
+import StudyMaterials from './Components/StudyMaterials';
 
 function App() {
   const [showChatbot, setShowChatbot] = useState(false);
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden">
-      {/* Animated gradient background */}
-      <div className="absolute inset-0 -z-10 animate-gradient bg-gradient-to-r from-purple-500 via-pink-500 to-blue-500 bg-[length:400%_400%]" />
+    <div className="relative min-h-screen w-full overflow-hidden bg-black">
+      <div className="fixed inset-0 -z-10 bg-gradient-to-b from-gray-900 via-black to-gray-900" />
+      <div className="fixed inset-0 -z-10 opacity-20" style={{
+        backgroundImage: `radial-gradient(circle at 2px 2px, rgba(255,255,255,0.15) 1px, transparent 0)`,
+        backgroundSize: '40px 40px'
+      }} />
 
       <Router>
         <Navbar />
         <div className="content relative px-4 py-6">
           <ToastContainer />
           <Routes>
-
             <Route path="/" element={<Feed />} />
-            <Route path="/signup" element={<SignupForm />} /> {/* ✅ Signup route */}
-            <Route path="/login" element={<LoginForm />} /> {/* ✅ Signup route */}
+            <Route path="/signup" element={<SignupForm />} />
+            <Route path="/login" element={<LoginForm />} />
             <Route path="/events" element={<Events />} />
-            
             <Route path="/notices" element={<Notices />} />
-            
             <Route path="/academics" element={<Academics />} />
-            <Route path="/notices" element={<Notices />} />
             <Route path="/online-classes" element={<OnlineClasses />} />
-            <Route path="/video-call" element={<VideoCall />} />
             <Route path="/account/:id" element={<Account />} />
-            {/* Convenience routes for current user */}
             <Route path="/profile" element={<RedirectToMyAccount />} />
             <Route path="/account" element={<RedirectToMyAccount />} />
             <Route path="/addpost" element={<AddPostForm />} />
             <Route path="/addEvent" element={<EventForm />} />
             <Route path="/message/:recieverId" element={<MessageSection />} />
-            {/* Tools */}
-            <Route path="/ai-chatbot" element={<AIChatbot />} />
-            <Route path="/notifications" element={<PushNotifications />} />
-            <Route path="/quiz" element={<QuizPlatform />} />
-            <Route path="/code-editor" element={<CodeEditor />} />
             <Route path="/chat" element={<ChatSystem />} />
+            <Route path="/ai-chatbot" element={<AIChatbot onClose={() => window.history.back()} />} />
+            <Route path="/notifications" element={<PushNotifications />} />
+            <Route path="/quiz" element={<QuizPlatform onClose={() => window.history.back()} />} />
+            <Route path="/code-editor" element={<CodeEditor onClose={() => window.history.back()} />} />
+            <Route path="/video-call" element={<VideoCall onClose={() => window.history.back()} />} />
+            <Route path="/video-call/join/:sessionId" element={<JoinVideoCall />} />
+            <Route path="/study-materials" element={<StudyMaterials />} />
           </Routes>
         </div>
       </Router>
 
-      {/* Floating AI Chatbot Button */}
       <button
         onClick={() => setShowChatbot(!showChatbot)}
         className="fixed bottom-6 left-6 z-40 p-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110"
@@ -78,15 +78,12 @@ function App() {
         </svg>
       </button>
 
-      {/* AI Chatbot */}
       {showChatbot && (
         <AIChatbot onClose={() => setShowChatbot(false)} />
       )}
     </div>
   );
 }
-
-export default App;
 
 // Helper component to redirect to the logged-in user's account page
 function RedirectToMyAccount() {
@@ -106,3 +103,5 @@ function RedirectToMyAccount() {
     return <LoginForm />;
   }
 }
+
+export default App;
