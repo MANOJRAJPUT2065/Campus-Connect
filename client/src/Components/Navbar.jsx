@@ -5,11 +5,11 @@ import {
   FaHome, FaCalendarAlt, FaVideo, FaRobot, FaCode, 
   FaGraduationCap, FaChevronDown, FaComments, FaBook, FaBookmark
 } from 'react-icons/fa';
-import { buildApiUrl } from '../config/api';
-import axios from 'axios';
+import { authAPI } from '../services/api';
 
 const Navbar = () => {
   const [user, setUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -39,21 +39,12 @@ const Navbar = () => {
   useEffect(() => {
     const fetchUserDetails = async () => {
       try {
-        const token = localStorage.getItem('token');
-        if (!token) {
-          setUser(null);
-          return;
+        const response = await authAPI.getUserDetails();
+        if (response && response.data) {
+          setUser(response.data);
         }
-
-        const response = await axios.get(buildApiUrl('/api/users/auth/getUserDetails'), {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        setUser(response.data);
       } catch (error) {
         console.error('Error fetching user details:', error);
-        localStorage.removeItem('token');
         setUser(null);
       }
     };
@@ -61,10 +52,16 @@ const Navbar = () => {
     fetchUserDetails();
   }, []);
 
-  const handleLogout = () => {
-    setUser(null);
-    localStorage.removeItem('token');
-    navigate('/login');
+  const handleLogout = async () => {
+    try {
+      await authAPI.logout();
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      setUser(null);
+      localStorage.removeItem('token');
+      navigate('/login');
+    }
   };
 
   const handleSearch = (e) => {

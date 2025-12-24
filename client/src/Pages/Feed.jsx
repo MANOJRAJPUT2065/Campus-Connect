@@ -2,8 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import FeedCard from '../Components/FeedCard';
 import AddPost from '../Components/AddPost';
-import { buildApiUrl } from '../config/api';
-import axios from 'axios';
+import { postsAPI } from '../services/api';
 
 const Feed = () => {
   const [posts, setPosts] = useState([]);
@@ -13,12 +12,14 @@ const Feed = () => {
   const fetchPosts = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(buildApiUrl('/api/posts/getposts'));
-      setPosts(response.data);
-      setError(null);
+      const response = await postsAPI.getPosts();
+      if (response && response.data) {
+        setPosts(response.data);
+        setError(null);
+      }
     } catch (error) {
       console.error('Error fetching posts:', error);
-      setError('Failed to load posts');
+      setError('Failed to load posts. Please try again later.');
     } finally {
       setLoading(false);
     }

@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import axios from 'axios';
 import { jwtDecode } from 'jwt-decode';
 import { toast } from 'react-toastify';
-import { buildApiUrl } from '../config/api';
+import { postsAPI } from '../services/api';
 import { useNavigate } from 'react-router-dom';
 
 const AddPostForm = () => {
@@ -28,7 +27,7 @@ const AddPostForm = () => {
     if (file) setPreviewImage(URL.createObjectURL(file));
   };
 
-  const handlePost = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!userData) {
@@ -37,25 +36,26 @@ const AddPostForm = () => {
       return;
     }
 
-    try {
-      const formData = new FormData();
-      formData.append('title', title);
-      formData.append('content', content);
-      if (image) formData.append('image', image);
-      formData.append('email', userData.email);
-      formData.append('username', userData.username);
+    const formData = new FormData();
+    formData.append('title', title);
+    formData.append('content', content);
+    if (image) formData.append('media', image);
+    formData.append('email', userData.email);
+    formData.append('username', userData.username);
 
-      await axios.post(buildApiUrl('/api/posts'), formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      toast.success('Posted Successfully');
-      setTimeout(() => {
-        navigate('/');
-        window.location.reload();
-      }, 1000);
+    try {
+      const response = await postsAPI.createPost(formData);
+      if (response && response.data) {
+        setTitle('');
+        setContent('');
+        setImage(null);
+        setPreviewImage('');
+        toast.success('Posted Successfully');
+        setTimeout(() => {
+          navigate('/');
+          window.location.reload();
+        }, 1000);
+      }
     } catch (error) {
       console.error('Error posting:', error);
       const backendMsg = error.response?.data?.error || error.response?.data?.message;

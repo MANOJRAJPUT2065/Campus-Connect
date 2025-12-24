@@ -1,6 +1,11 @@
+// client/src/config/api.js
+
+// Base URL configuration
+const BASE_URL = "https://web-production-9c8b.up.railway.app";
+
 // API Configuration
 const API_CONFIG = {
-  BASE_URL: import.meta.env.VITE_API_URL || 'http://localhost:7071',
+  BASE_URL: BASE_URL,
 
   // API endpoints
   ENDPOINTS: {
@@ -98,7 +103,7 @@ const API_CONFIG = {
 
 // Helper function to build full API URLs
 export const buildApiUrl = (endpoint) => {
-  return `${API_CONFIG.BASE_URL}${endpoint}`;
+  return `${BASE_URL}${endpoint}`;
 };
 
 // Export the config
