@@ -68,7 +68,7 @@ const AddPostForm = () => {
       <div className="flex justify-center gap-8 flex-wrap items-center w-full max-w-screen-lg bg-white p-8 rounded-lg shadow-lg">
         <div className="w-1/2 min-w-[400px] p-4 bg-gray-100 rounded-lg shadow-md">
           <h2 className="text-3xl font-bold mb-6 text-center text-gray-800">Add Post</h2>
-          <form className="space-y-6" onSubmit={handlePost}>
+          <form className="space-y-6" onSubmit={handleSubmit}>
             <label className="block">
               <span className="text-lg font-semibold text-gray-700">Title </span>
               <span className="text-gray-500">(max 50 words):</span>

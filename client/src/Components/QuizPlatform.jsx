@@ -62,36 +62,64 @@ const QuizPlatform = ({ onClose }) => {
     }
   };
 
-  const startQuiz = (quiz) => {
-    setCurrentQuiz(quiz);
-    setCurrentQuestionIndex(0);
-    setUserAnswers({});
-    setTimeLeft(quiz.timeLimit * 60); // Convert to seconds
-    setIsQuizActive(true);
-    toast.success(`Started: ${quiz.title}`);
+  const startQuiz = async (quiz) => {
+    try {
+      let assembled = quiz;
+      if (!Array.isArray(quiz.questions) || quiz.questions.length === 0) {
+        const topic = quiz.topic || 'all';
+        const count = 10;
+        const res = await fetch(buildApiUrl(`/api/quiz/questions/${encodeURIComponent(topic)}?count=${count}`));
+        const data = await res.json();
+        const questions = Array.isArray(data?.questions) ? data.questions : [];
+        assembled = {
+          _id: quiz.id || `ad-hoc-${topic}`,
+          title: quiz.title || `${(topic || 'General').toString().toUpperCase()} Quiz`,
+          description: quiz.description || `Auto-generated questions for ${topic}`,
+          timeLimit: quiz.timeLimit || 10,
+          questions
+        };
+      }
+      setCurrentQuiz(assembled);
+      setCurrentQuestionIndex(0);
+      setUserAnswers({});
+      setTimeLeft((assembled.timeLimit || 10) * 60);
+      setIsQuizActive(true);
+      toast.success(`Started: ${assembled.title}`);
+    } catch (e) {
+      toast.error('Failed to start quiz');
+    }
   };
 
   const submitQuiz = async () => {
     if (!currentQuiz) return;
 
     try {
-      const score = calculateScore();
+      const answersArray = (currentQuiz.questions || []).map((q, idx) => ({
+        questionId: q.id || q._id || idx,
+        selectedAnswer: userAnswers[idx],
+        question: q.question
+      }));
+
       const response = await fetch(buildApiUrl('/api/quiz/submit'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          quizId: currentQuiz._id,
-          answers: userAnswers,
-          score,
-          timeTaken: currentQuiz.timeLimit * 60 - timeLeft
+          answers: answersArray,
+          timeTaken: (currentQuiz.timeLimit || 10) * 60 - timeLeft
         })
       });
 
       if (response.ok) {
-        const result = await response.json();
-        setQuizResults(prev => [result, ...prev]);
-        toast.success(`Quiz completed! Score: ${score}/${currentQuiz.questions.length}`);
+        const data = await response.json();
+        const r = data?.results;
+        if (r) {
+          toast.success(`Quiz completed! Score: ${r.score}/${r.totalQuestions}`);
+        } else {
+          toast.success('Quiz submitted');
+        }
         resetQuiz();
+      } else {
+        toast.error('Failed to submit quiz');
       }
     } catch (error) {
       toast.error('Failed to submit quiz');
@@ -383,6 +411,13 @@ const QuizPlatform = ({ onClose }) => {
           {activeTab === 'take' && (
             <div>
               <h3 className="text-2xl font-bold mb-6">Available Quizzes</h3>
+
+              {/* Topic Practice Generator */}
+              <div className="mb-6 p-4 border rounded-lg bg-gray-50">
+                <h4 className="font-semibold mb-3">Generate Quiz by Topic (AI)</h4>
+                <TopicGenerator onStart={(assembled) => startQuiz(assembled)} />
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {quizzes.map((quiz) => (
                   <motion.div
@@ -397,11 +432,11 @@ const QuizPlatform = ({ onClose }) => {
                       <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
                         <span className="flex items-center">
                           <FaQuestion className="mr-1" />
-                          {quiz.questions.length} questions
+                          {(quiz.questions?.length ?? quiz.totalQuestions ?? 0)} questions
                         </span>
                         <span className="flex items-center">
                           <FaClock className="mr-1" />
-                          {quiz.timeLimit} min
+                          {(quiz.timeLimit ?? 10)} min
                         </span>
                       </div>
                       
@@ -610,3 +645,66 @@ const QuizPlatform = ({ onClose }) => {
 };
 
 export default QuizPlatform;
+
+// Lightweight topic generator component
+const TopicGenerator = ({ onStart }) => {
+  const [topic, setTopic] = useState('programming');
+  const [count, setCount] = useState(8);
+  const [difficulty, setDifficulty] = useState('mixed');
+  const [loading, setLoading] = useState(false);
+
+  const generate = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch(buildApiUrl('/api/quiz/generate'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic, count, difficulty })
+      });
+      const data = await res.json();
+      if (data?.success && Array.isArray(data.questions) && data.questions.length) {
+        onStart({
+          id: `gen-${Date.now()}`,
+          title: `${topic.toUpperCase()} Practice` ,
+          description: `Generated by AI • ${difficulty}`,
+          timeLimit: Math.max(10, Math.min(30, Math.ceil((count || 8) * 1.25))),
+          topic,
+          questions: data.questions
+        });
+      } else {
+        toast.error('Could not generate quiz. Try another topic.');
+      }
+    } catch (e) {
+      toast.error('Quiz generation failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
+      <div className="md:col-span-2">
+        <label className="block text-sm text-gray-600 mb-1">Topic</label>
+        <input value={topic} onChange={(e) => setTopic(e.target.value)} className="w-full px-3 py-2 border rounded" placeholder="e.g., data structures" />
+      </div>
+      <div>
+        <label className="block text-sm text-gray-600 mb-1">Questions</label>
+        <input type="number" min={4} max={20} value={count} onChange={(e) => setCount(parseInt(e.target.value)||8)} className="w-full px-3 py-2 border rounded" />
+      </div>
+      <div>
+        <label className="block text-sm text-gray-600 mb-1">Difficulty</label>
+        <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} className="w-full px-3 py-2 border rounded">
+          <option value="easy">easy</option>
+          <option value="medium">medium</option>
+          <option value="hard">hard</option>
+          <option value="mixed">mixed</option>
+        </select>
+      </div>
+      <div>
+        <button onClick={generate} disabled={loading} className="w-full px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50">
+          {loading ? 'Generating...' : 'Generate' }
+        </button>
+      </div>
+    </div>
+  );
+};

@@ -19,9 +19,10 @@ const FeedCard = ({ title, content, image, author, username, createdAt, onRemove
   useEffect(() => {
     const fetchUserDetails = async () => {
       try {
-        const response = await axios.get(buildApiUrl('/api/users/auth/getUserDetails'), {
+        const token = localStorage.getItem('token');
+        const response = await axios.get(buildApiUrl(`/api/users/auth/getUserDetails?email=${author}`), {
           headers: {
-            'Authorization': `Bearer ${author}`
+            'Authorization': `Bearer ${token}`
           }
         });
         setPpUrl(response.data.profilePicUrl);

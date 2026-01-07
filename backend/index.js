@@ -13,6 +13,7 @@ const __dirname = path.dirname(__filename);
 // Import routes
 import userRoute from './routes/UserRoute.js';
 import postRoute from './routes/PostRoute.js';
+import authRoute from './routes/AuthRoute.js';
 import EventRoute from './routes/EventRoute.js';
 import contactRoute from './routes/ContactRoute.js';
 import videocallRoute from './routes/videocall.js';
@@ -20,6 +21,7 @@ import chatbotRoute from './routes/chatbot.js';
 import notificationsRoute from './routes/notifications.js';
 import advancedFeaturesRoute from './routes/advanced-features.js';
 import voiceRoute from './routes/voice.js';
+import sessionRoute from './routes/SessionRoute.js';
 import likePostRoute from './routes/LikePostRoute.js';
 import bookmarkRoute from './routes/BookmarkRoute.js';
 import commentRoute from './routes/CommentRoute.js';
@@ -30,6 +32,10 @@ import quizRoute from './routes/quiz.js';
 import calendarSyncRoute from './routes/calendar-sync.js';
 import lectureRecordingsRoute from './routes/lecture-recordings.js';
 import recommendationsRoute from './routes/recommendations.js';
+
+// Role-based Routes (NEW)
+import teacherRoute from './routes/TeacherRoute.js';
+import coordinatorRoute from './routes/CoordinatorRoute.js';
 
 // Load environment variables
 dotenv.config();
@@ -72,6 +78,7 @@ mongoose.connect(process.env.MONGODB_URI)
 // Routes - MUST be before static file serving in production
 app.use('/api/users', userRoute);
 app.use('/api/posts', postRoute);
+app.use('/api/auth', authRoute);
 app.use('/events', EventRoute);
 app.use('/api/contact', contactRoute);
 
@@ -81,6 +88,7 @@ app.use('/api/chatbot', chatbotRoute);
 app.use('/api/notifications', notificationsRoute);
 app.use('/api/advanced-features', advancedFeaturesRoute);
 app.use('/api/voice', voiceRoute);
+app.use('/api/sessions', sessionRoute);
 
 // Additional Routes
 app.use('/api/likes', likePostRoute);
@@ -94,6 +102,14 @@ app.use('/api/quiz', quizRoute);
 // New Advanced Features - Now Enabled
 app.use('/api/calendar', calendarSyncRoute);
 app.use('/api/recordings', lectureRecordingsRoute);
+app.use('/api/recommendations', recommendationsRoute);
+app.use('/api/notes', notesRoute);
+
+// Role-Based Routes (NEW)
+app.use('/api/teacher', teacherRoute);
+app.use('/api/coordinator', coordinatorRoute);
+
+console.log('✅ All routes mounted successfully');
 app.use('/api/recommendations', recommendationsRoute);
 
 // Serve static files from React app in production - MUST be after all API routes
@@ -153,6 +169,29 @@ io.on('connection', (socket) => {
   // Handle chat messages
   socket.on('send-message', (data) => {
     io.to(data.roomId).emit('new-message', data);
+  });
+
+  // Raise hand in meeting
+  socket.on('raise-hand', (data) => {
+    // data: { roomId, userId, raised: true/false }
+    io.to(data.roomId).emit('hand-raised', data);
+  });
+
+  // Emoji reactions
+  socket.on('reaction', (data) => {
+    // data: { roomId, userId, emoji, timestamp }
+    socket.to(data.roomId).emit('reaction', data);
+  });
+
+  // Host actions
+  socket.on('host-mute-all', (data) => {
+    // data: { roomId, hostId }
+    io.to(data.roomId).emit('mute-all', { by: data.hostId });
+  });
+
+  socket.on('host-end-meeting', (data) => {
+    // data: { roomId, hostId }
+    io.to(data.roomId).emit('meeting-ended', { by: data.hostId });
   });
 
   // Handle whiteboard updates

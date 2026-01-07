@@ -10,7 +10,7 @@ import FriendsList from '../../Components/FriendsList';
 import './Message.css';
 import defaultImage from '../../assets/default.avif';
 
-const socket = io(import.meta.env.VITE_API_URL || 'http://localhost:7071');
+const socket = io('http://localhost:5000', { transports: ['websocket'], withCredentials: false });
 
 const MessageSection = () => {
   const navigate = useNavigate();
@@ -31,9 +31,13 @@ const MessageSection = () => {
   }, [messages]);
 
   useEffect(() => {
-    axios.get(buildApiUrl('/api/users/auth/getUserDetails'), {
+    // Get current user token from localStorage
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    
+    axios.get(buildApiUrl(`/api/users/auth/getUserDetails?email=${recieverId}`), {
       headers: {
-        Authorization: `Bearer ${recieverId}`
+        Authorization: `Bearer ${token}`
       }
     })
     .then(response => {

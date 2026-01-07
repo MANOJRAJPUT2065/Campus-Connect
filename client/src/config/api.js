@@ -1,7 +1,7 @@
 // client/src/config/api.js
 
-// Base URL configuration
-const BASE_URL = "https://web-production-9c8b.up.railway.app";
+// Base URL configuration - Support both local and production
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 // API Configuration
 const API_CONFIG = {

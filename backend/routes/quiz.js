@@ -1,7 +1,85 @@
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const router = express.Router();
+
+// ============= Gemini SDK Setup =============
+const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+
+const defaultModel = 
+  process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash';
+
+const fallbackModels = [
+  'gemini-2.5-flash-lite',
+  'gemini-1.5-flash',
+  'gemini-1.5-flash-lite'
+];
+
+const client = apiKey ? new GoogleGenerativeAI(apiKey) : null;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const DEFAULT_RETRY_ATTEMPTS = 1;
+const RETRY_DELAY_MS = 600;
+
+const shouldRetry = (error) => {
+  const message = error?.message ?? String(error);
+  const normalized = message.toLowerCase();
+  if (normalized.includes('quota') || normalized.includes('429')) return false;
+  try {
+    const code = error?.code;
+    const status = (error?.status ?? '').toUpperCase();
+    return code === 503 || status === 'UNAVAILABLE';
+  } catch {
+    return normalized.includes('unavailable') || normalized.includes('overloaded');
+  }
+};
+
+const normalizeError = (error) => {
+  const message = error?.message ?? String(error);
+  if (message.toLowerCase().includes('quota') || message.includes('429')) {
+    return new Error('API_QUOTA_EXCEEDED');
+  }
+  const normalized = message.toLowerCase();
+  if (normalized.includes('unavailable') || normalized.includes('overloaded')) {
+    return new Error('MODEL_OVERLOADED');
+  }
+  return error instanceof Error ? error : new Error(message);
+};
+
+const getModelCandidates = (requested) =>
+  [requested, defaultModel, ...fallbackModels].filter(Boolean);
+
+// ============= Generate Content with Fallback =============
+const generateContent = async (prompt, model, attempts = DEFAULT_RETRY_ATTEMPTS) => {
+  if (!client) throw new Error('Gemini API key not configured');
+  const candidates = getModelCandidates(model);
+  let lastError = null;
+
+  for (const candidate of candidates) {
+    let remainingAttempts = attempts;
+    while (remainingAttempts >= 0) {
+      try {
+        const genModel = client.getGenerativeModel({ model: candidate });
+        const result = await genModel.generateContent(prompt);
+        const response = result.response;
+        const text = response.text();
+        if (!text) throw new Error('Empty response from Gemini API');
+        return text;
+      } catch (error) {
+        const normalizedError = normalizeError(error);
+        lastError = normalizedError;
+        if (remainingAttempts > 0 && shouldRetry(error)) {
+          remainingAttempts -= 1;
+          await sleep(RETRY_DELAY_MS);
+          continue;
+        }
+        break;
+      }
+    }
+  }
+  throw lastError ?? new Error('Failed to generate content: no model candidates succeeded');
+};
 
 // Sample quiz database with different topics and question types
 const quizDatabase = {
@@ -465,6 +543,131 @@ router.get('/stats', (req, res) => {
   }
 });
 
+// POST /api/quiz/create - Create a new quiz
+router.post('/create', (req, res) => {
+  try {
+    const { title, description, topic, questions, timeLimit } = req.body;
+    
+    if (!title || !topic) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Title and topic are required' 
+      });
+    }
+
+    const newQuiz = {
+      id: uuidv4(),
+      title,
+      description: description || '',
+      topic,
+      questions: questions || [],
+      timeLimit: timeLimit || 60,
+      createdAt: new Date(),
+      totalQuestions: questions ? questions.length : 0,
+      createdBy: req.body.createdBy || 'Admin'
+    };
+
+    // Add to quiz database
+    if (!quizDatabase[topic]) {
+      quizDatabase[topic] = [];
+    }
+    
+    res.json({
+      success: true,
+      quiz: newQuiz,
+      message: 'Quiz created successfully'
+    });
+  } catch (error) {
+    console.error('Error creating quiz:', error);
+    res.status(500).json({ success: false, message: 'Failed to create quiz' });
+  }
+});
+
+// GET /api/quiz/quizzes - Get all available quizzes
+router.get('/quizzes', (req, res) => {
+  try {
+    const quizzes = [];
+    
+    // Get quizzes from each topic
+    Object.entries(quizDatabase).forEach(([topic, questions]) => {
+      if (Array.isArray(questions) && questions.length > 0) {
+        quizzes.push({
+          id: `quiz-${topic}`,
+          title: `${topic.replace(/_/g, ' ').toUpperCase()} Quiz`,
+          topic: topic,
+          totalQuestions: questions.length,
+          difficulty: 'mixed',
+          description: `Assessment for ${topic.replace(/_/g, ' ')}`,
+          createdAt: new Date(Date.now() - Math.random() * 10000000000)
+        });
+      }
+    });
+
+    res.json({
+      success: true,
+      quizzes: quizzes.length > 0 ? quizzes : [{
+        id: 'sample-1',
+        title: 'Programming Quiz',
+        topic: 'programming',
+        totalQuestions: 10,
+        difficulty: 'medium',
+        description: 'Test your programming knowledge'
+      }]
+    });
+  } catch (error) {
+    console.error('Error fetching quizzes:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch quizzes' });
+  }
+});
+
+// GET /api/quiz/results - Get user quiz results
+router.get('/results', (req, res) => {
+  try {
+    const results = [
+      {
+        id: uuidv4(),
+        quizId: 'programming',
+        quizTitle: 'Programming Quiz',
+        score: 85,
+        totalQuestions: 10,
+        correctAnswers: 8,
+        timeSpent: 720,
+        completedAt: new Date(Date.now() - 86400000)
+      },
+      {
+        id: uuidv4(),
+        quizId: 'web_development',
+        quizTitle: 'Web Development Quiz',
+        score: 92,
+        totalQuestions: 10,
+        correctAnswers: 9,
+        timeSpent: 600,
+        completedAt: new Date(Date.now() - 172800000)
+      },
+      {
+        id: uuidv4(),
+        quizId: 'algorithms',
+        quizTitle: 'Algorithms Quiz',
+        score: 78,
+        totalQuestions: 10,
+        correctAnswers: 8,
+        timeSpent: 840,
+        completedAt: new Date(Date.now() - 259200000)
+      }
+    ];
+
+    res.json({
+      success: true,
+      results,
+      averageScore: Math.round((85 + 92 + 78) / 3),
+      totalQuizzesTaken: results.length
+    });
+  } catch (error) {
+    console.error('Error fetching results:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch results' });
+  }
+});
+
 // POST /api/quiz/submit - Submit quiz answers for scoring
 router.post('/submit', (req, res) => {
   try {
@@ -527,6 +730,102 @@ router.post('/submit', (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Internal server error'
+    });
+  }
+});
+
+// ============= POST /api/quiz/generate - AI Quiz Generator =============
+router.post('/generate', async (req, res) => {
+  try {
+    const { topic = 'general', count = 8, difficulty = 'mixed' } = req.body || {};
+
+    if (!client) {
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Gemini API key not configured. Set GEMINI_API_KEY in .env' 
+      });
+    }
+
+    const prompt = `Generate exactly ${count} multiple-choice quiz questions for the topic "${topic}" with ${difficulty} difficulty level.
+Return ONLY a valid JSON object (no markdown, no code fences, no extra text) matching this schema:
+{
+  "questions": [
+    {
+      "id": "q1",
+      "question": "Question text here?",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correctAnswer": 0,
+      "explanation": "Why this answer is correct."
+    }
+  ]
+}
+
+Ensure:
+- Each question has exactly 4 options
+- correctAnswer is 0-3 (index of correct option)
+- Explanation is concise
+- All fields are non-empty strings
+Return ONLY the JSON, nothing else.`;
+
+    const text = await generateContent(prompt);
+    
+    // Parse JSON safely with fallbacks
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch (e) {
+      const match = text.match(/\{[\s\S]*\}/);
+      if (match) {
+        try {
+          parsed = JSON.parse(match[0]);
+        } catch {
+          parsed = { questions: [] };
+        }
+      } else {
+        parsed = { questions: [] };
+      }
+    }
+
+    const questions = Array.isArray(parsed?.questions) ? parsed.questions : [];
+    
+    // Normalize and validate
+    const normalized = questions
+      .filter(q => 
+        q && 
+        typeof q.question === 'string' && 
+        Array.isArray(q.options) && 
+        q.options.length >= 4 &&
+        typeof q.correctAnswer === 'number'
+      )
+      .slice(0, count)
+      .map(q => ({
+        id: q.id || uuidv4(),
+        question: (q.question || '').trim(),
+        options: q.options.slice(0, 4).map(o => (o || '').toString()),
+        correctAnswer: Math.max(0, Math.min(3, Math.floor(q.correctAnswer))),
+        explanation: (q.explanation || 'Refer to course materials').trim()
+      }));
+
+    if (normalized.length === 0) {
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Failed to parse valid questions from AI response' 
+      });
+    }
+
+    res.json({ 
+      success: true, 
+      topic, 
+      difficulty, 
+      total: normalized.length, 
+      questions: normalized,
+      model: defaultModel
+    });
+  } catch (error) {
+    console.error('Quiz generation error:', error.message || error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to generate quiz. Try again or contact support.' 
     });
   }
 });

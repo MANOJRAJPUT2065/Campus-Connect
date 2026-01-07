@@ -3,7 +3,8 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { 
   FaUser, FaSignOutAlt, FaBell, FaSearch, FaBars, FaTimes, 
   FaHome, FaCalendarAlt, FaVideo, FaRobot, FaCode, 
-  FaGraduationCap, FaChevronDown, FaComments, FaBook, FaBookmark
+  FaGraduationCap, FaChevronDown, FaComments, FaBook, FaBookmark,
+  FaChalkboardTeacher, FaUsers
 } from 'react-icons/fa';
 import { authAPI } from '../services/api';
 
@@ -18,6 +19,7 @@ const Navbar = () => {
   const userMenuRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
+  const role = localStorage.getItem('userRole');
 
   // Close menus when clicking outside
   useEffect(() => {
@@ -79,6 +81,291 @@ const Navbar = () => {
 
   const isActive = (path) => location.pathname === path;
 
+  const renderDesktopLinks = () => {
+    const commonHome = (
+      <Link 
+        to="/" 
+        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+          isActive('/') 
+            ? 'text-white bg-white/10' 
+            : 'text-gray-300 hover:text-white hover:bg-white/5'
+        }`}
+      >
+        <FaHome className="inline mr-2" />
+        Home
+      </Link>
+    );
+
+    if (role === 'teacher') {
+      return (
+        <>
+          {commonHome}
+          <Link 
+            to="/teacher-dashboard" 
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+              isActive('/teacher-dashboard') 
+                ? 'text-white bg-white/10' 
+                : 'text-gray-300 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <FaChalkboardTeacher className="inline mr-2" />
+            Teacher Dashboard
+          </Link>
+        </>
+      );
+    }
+
+    if (role === 'coordinator') {
+      return (
+        <>
+          {commonHome}
+          <Link 
+            to="/coordinator-dashboard" 
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+              isActive('/coordinator-dashboard') 
+                ? 'text-white bg-white/10' 
+                : 'text-gray-300 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <FaUsers className="inline mr-2" />
+            Coordinator Dashboard
+          </Link>
+        </>
+      );
+    }
+
+    // Student and unauthenticated default to student navigation shell
+    return (
+      <>
+        {commonHome}
+        <Link 
+          to="/feed" 
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+            isActive('/feed') 
+              ? 'text-white bg-white/10' 
+              : 'text-gray-300 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <FaHome className="inline mr-2" />
+          Feed
+        </Link>
+        <Link 
+          to="/events" 
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+            isActive('/events') 
+              ? 'text-white bg-white/10' 
+              : 'text-gray-300 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <FaCalendarAlt className="inline mr-2" />
+          Events
+        </Link>
+        <Link 
+          to="/notices" 
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+            isActive('/notices') 
+              ? 'text-white bg-white/10' 
+              : 'text-gray-300 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <FaBookmark className="inline mr-2" />
+          Notices
+        </Link>
+        <Link 
+          to="/online-classes" 
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+            isActive('/online-classes') 
+              ? 'text-white bg-white/10' 
+              : 'text-gray-300 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <FaVideo className="inline mr-2" />
+          Classes
+        </Link>
+        <Link 
+          to="/study-materials" 
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+            isActive('/study-materials') 
+              ? 'text-white bg-white/10' 
+              : 'text-gray-300 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <FaBook className="inline mr-2" />
+          Study Materials
+        </Link>
+      </>
+    );
+  };
+
+  const renderMoreMenuLinks = () => {
+    if (role && role !== 'student') return null;
+
+    return (
+      <>
+        <Link
+          to="/ai-chatbot"
+          onClick={() => setShowMoreMenu(false)}
+          className="block px-4 py-2 text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
+        >
+          <FaRobot className="inline mr-2" />
+          AI Chatbot
+        </Link>
+        <Link
+          to="/quiz"
+          onClick={() => setShowMoreMenu(false)}
+          className="block px-4 py-2 text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
+        >
+          <FaGraduationCap className="inline mr-2" />
+          Quiz Platform
+        </Link>
+        <Link
+          to="/code-editor"
+          onClick={() => setShowMoreMenu(false)}
+          className="block px-4 py-2 text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
+        >
+          <FaCode className="inline mr-2" />
+          Code Editor
+        </Link>
+        <Link
+          to="/chat"
+          onClick={() => setShowMoreMenu(false)}
+          className="block px-4 py-2 text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
+        >
+          <FaComments className="inline mr-2" />
+          Chat System
+        </Link>
+      </>
+    );
+  };
+
+  const renderMobileLinks = () => {
+    const linkClass = (path) => `block px-4 py-2 text-base font-medium ${
+      isActive(path) ? 'text-white bg-white/10' : 'text-gray-300 hover:bg-white/5 hover:text-white'
+    } rounded-md`;
+
+    const homeLink = (
+      <Link
+        to="/"
+        onClick={toggleMobileMenu}
+        className={linkClass('/')}
+      >
+        <FaHome className="inline mr-2" />
+        Home
+      </Link>
+    );
+
+    if (role === 'teacher') {
+      return (
+        <>
+          {homeLink}
+          <Link
+            to="/teacher-dashboard"
+            onClick={toggleMobileMenu}
+            className={linkClass('/teacher-dashboard')}
+          >
+            <FaChalkboardTeacher className="inline mr-2" />
+            Teacher Dashboard
+          </Link>
+        </>
+      );
+    }
+
+    if (role === 'coordinator') {
+      return (
+        <>
+          {homeLink}
+          <Link
+            to="/coordinator-dashboard"
+            onClick={toggleMobileMenu}
+            className={linkClass('/coordinator-dashboard')}
+          >
+            <FaUsers className="inline mr-2" />
+            Coordinator Dashboard
+          </Link>
+        </>
+      );
+    }
+
+    // Student / default navigation
+    return (
+      <>
+        {homeLink}
+        <Link
+          to="/feed"
+          onClick={toggleMobileMenu}
+          className={linkClass('/feed')}
+        >
+          <FaHome className="inline mr-2" />
+          Feed
+        </Link>
+        <Link
+          to="/events"
+          onClick={toggleMobileMenu}
+          className={linkClass('/events')}
+        >
+          <FaCalendarAlt className="inline mr-2" />
+          Events
+        </Link>
+        <Link
+          to="/notices"
+          onClick={toggleMobileMenu}
+          className={linkClass('/notices')}
+        >
+          <FaBookmark className="inline mr-2" />
+          Notices
+        </Link>
+        <Link
+          to="/online-classes"
+          onClick={toggleMobileMenu}
+          className={linkClass('/online-classes')}
+        >
+          <FaVideo className="inline mr-2" />
+          Online Classes
+        </Link>
+        <Link
+          to="/study-materials"
+          onClick={toggleMobileMenu}
+          className={linkClass('/study-materials')}
+        >
+          <FaBook className="inline mr-2" />
+          Study Materials
+        </Link>
+        <Link
+          to="/chat"
+          onClick={toggleMobileMenu}
+          className={linkClass('/chat')}
+        >
+          <FaComments className="inline mr-2" />
+          Chat System
+        </Link>
+        <Link
+          to="/ai-chatbot"
+          onClick={toggleMobileMenu}
+          className={linkClass('/ai-chatbot')}
+        >
+          <FaRobot className="inline mr-2" />
+          AI Chatbot
+        </Link>
+        <Link
+          to="/quiz"
+          onClick={toggleMobileMenu}
+          className={linkClass('/quiz')}
+        >
+          <FaGraduationCap className="inline mr-2" />
+          Quiz Platform
+        </Link>
+        <Link
+          to="/code-editor"
+          onClick={toggleMobileMenu}
+          className={linkClass('/code-editor')}
+        >
+          <FaCode className="inline mr-2" />
+          Code Editor
+        </Link>
+      </>
+    );
+  };
+
   return (
     <nav className="bg-black/90 backdrop-blur-md border-b border-gray-800 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -94,114 +381,42 @@ const Navbar = () => {
 
             {/* Main Navigation - Desktop */}
             <div className="hidden lg:flex items-center space-x-1">
-              <Link 
-                to="/" 
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                  isActive('/') 
-                    ? 'text-white bg-white/10' 
-                    : 'text-gray-300 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <FaHome className="inline mr-2" />
-                Home
-              </Link>
-              <Link 
-                to="/events" 
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                  isActive('/events') 
-                    ? 'text-white bg-white/10' 
-                    : 'text-gray-300 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <FaCalendarAlt className="inline mr-2" />
-                Events
-              </Link>
-              <Link 
-                to="/notices" 
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                  isActive('/notices') 
-                    ? 'text-white bg-white/10' 
-                    : 'text-gray-300 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <FaBookmark className="inline mr-2" />
-                Notices
-              </Link>
-              <Link 
-                to="/online-classes" 
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                  isActive('/online-classes') 
-                    ? 'text-white bg-white/10' 
-                    : 'text-gray-300 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <FaVideo className="inline mr-2" />
-                Classes
-              </Link>
-              
-              {/* More Menu */}
-              <div className="relative" ref={moreMenuRef}>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowMoreMenu(!showMoreMenu);
-                    setShowUserMenu(false);
-                  }}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center ${
-                    showMoreMenu
-                      ? 'text-white bg-white/10'
-                      : 'text-gray-300 hover:text-white hover:bg-white/5'
-                  }`}
-                >
-                  More
-                  <FaChevronDown className={`ml-1 text-xs transition-transform ${showMoreMenu ? 'rotate-180' : ''}`} />
-                </button>
-                
-                {showMoreMenu && (
-                  <div className="absolute top-full left-0 mt-2 w-56 bg-gray-900 rounded-lg shadow-xl border border-gray-800 py-2 z-50">
-                    <Link
-                      to="/ai-chatbot"
-                      onClick={() => setShowMoreMenu(false)}
-                      className="block px-4 py-2 text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
-                    >
-                      <FaRobot className="inline mr-2" />
-                      AI Chatbot
-                    </Link>
-                    <Link
-                      to="/study-materials"
-                      onClick={() => setShowMoreMenu(false)}
-                      className="block px-4 py-2 text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
-                    >
-                      <FaBook className="inline mr-2" />
-                      Study Materials
-                    </Link>
-                    <Link
-                      to="/quiz"
-                      onClick={() => setShowMoreMenu(false)}
-                      className="block px-4 py-2 text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
-                    >
-                      <FaGraduationCap className="inline mr-2" />
-                      Quiz Platform
-                    </Link>
-                    <Link
-                      to="/code-editor"
-                      onClick={() => setShowMoreMenu(false)}
-                      className="block px-4 py-2 text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
-                    >
-                      <FaCode className="inline mr-2" />
-                      Code Editor
-                    </Link>
-                    <Link
-                      to="/chat"
-                      onClick={() => setShowMoreMenu(false)}
-                      className="block px-4 py-2 text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
-                    >
-                      <FaComments className="inline mr-2" />
-                      Chat System
-                    </Link>
-                  </div>
-                )}
-              </div>
+              {renderDesktopLinks()}
+
+              {/* More Menu (student only) */}
+              {(!role || role === 'student') && (
+                <div className="relative" ref={moreMenuRef}>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowMoreMenu(!showMoreMenu);
+                      setShowUserMenu(false);
+                    }}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center ${
+                      showMoreMenu
+                        ? 'text-white bg-white/10'
+                        : 'text-gray-300 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    More
+                    <FaChevronDown className={`ml-1 text-xs transition-transform ${showMoreMenu ? 'rotate-180' : ''}`} />
+                  </button>
+                  
+                  {showMoreMenu && (
+                    <div className="absolute top-full left-0 mt-2 w-56 bg-gray-900 rounded-lg shadow-xl border border-gray-800 py-2 z-50">
+                      <Link
+                        to="/study-materials"
+                        onClick={() => setShowMoreMenu(false)}
+                        className="block px-4 py-2 text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
+                      >
+                        <FaBook className="inline mr-2" />
+                        Study Materials
+                      </Link>
+                      {renderMoreMenuLinks()}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -332,96 +547,7 @@ const Navbar = () => {
             </form>
 
             {/* Mobile Navigation Links */}
-            <Link
-              to="/"
-              onClick={toggleMobileMenu}
-              className={`block px-4 py-2 text-base font-medium ${
-                isActive('/') ? 'text-white bg-white/10' : 'text-gray-300 hover:bg-white/5 hover:text-white'
-              } rounded-md`}
-            >
-              <FaHome className="inline mr-2" />
-              Home
-            </Link>
-            <Link
-              to="/events"
-              onClick={toggleMobileMenu}
-              className={`block px-4 py-2 text-base font-medium ${
-                isActive('/events') ? 'text-white bg-white/10' : 'text-gray-300 hover:bg-white/5 hover:text-white'
-              } rounded-md`}
-            >
-              <FaCalendarAlt className="inline mr-2" />
-              Events
-            </Link>
-            <Link
-              to="/notices"
-              onClick={toggleMobileMenu}
-              className={`block px-4 py-2 text-base font-medium ${
-                isActive('/notices') ? 'text-white bg-white/10' : 'text-gray-300 hover:bg-white/5 hover:text-white'
-              } rounded-md`}
-            >
-              <FaBookmark className="inline mr-2" />
-              Notices
-            </Link>
-            <Link
-              to="/online-classes"
-              onClick={toggleMobileMenu}
-              className={`block px-4 py-2 text-base font-medium ${
-                isActive('/online-classes') ? 'text-white bg-white/10' : 'text-gray-300 hover:bg-white/5 hover:text-white'
-              } rounded-md`}
-            >
-              <FaVideo className="inline mr-2" />
-              Online Classes
-            </Link>
-            <Link
-              to="/study-materials"
-              onClick={toggleMobileMenu}
-              className={`block px-4 py-2 text-base font-medium ${
-                isActive('/study-materials') ? 'text-white bg-white/10' : 'text-gray-300 hover:bg-white/5 hover:text-white'
-              } rounded-md`}
-            >
-              <FaBook className="inline mr-2" />
-              Study Materials
-            </Link>
-            <Link
-              to="/ai-chatbot"
-              onClick={toggleMobileMenu}
-              className={`block px-4 py-2 text-base font-medium ${
-                isActive('/ai-chatbot') ? 'text-white bg-white/10' : 'text-gray-300 hover:bg-white/5 hover:text-white'
-              } rounded-md`}
-            >
-              <FaRobot className="inline mr-2" />
-              AI Chatbot
-            </Link>
-            <Link
-              to="/quiz"
-              onClick={toggleMobileMenu}
-              className={`block px-4 py-2 text-base font-medium ${
-                isActive('/quiz') ? 'text-white bg-white/10' : 'text-gray-300 hover:bg-white/5 hover:text-white'
-              } rounded-md`}
-            >
-              <FaGraduationCap className="inline mr-2" />
-              Quiz Platform
-            </Link>
-            <Link
-              to="/code-editor"
-              onClick={toggleMobileMenu}
-              className={`block px-4 py-2 text-base font-medium ${
-                isActive('/code-editor') ? 'text-white bg-white/10' : 'text-gray-300 hover:bg-white/5 hover:text-white'
-              } rounded-md`}
-            >
-              <FaCode className="inline mr-2" />
-              Code Editor
-            </Link>
-            <Link
-              to="/chat"
-              onClick={toggleMobileMenu}
-              className={`block px-4 py-2 text-base font-medium ${
-                isActive('/chat') ? 'text-white bg-white/10' : 'text-gray-300 hover:bg-white/5 hover:text-white'
-              } rounded-md`}
-            >
-              <FaComments className="inline mr-2" />
-              Chat System
-            </Link>
+            {renderMobileLinks()}
 
             {/* Mobile User Menu */}
             {user ? (

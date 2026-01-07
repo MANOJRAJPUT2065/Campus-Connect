@@ -91,6 +91,58 @@ export const chatAPI = {
     api.post(API_CONFIG.ENDPOINTS.CHAT.CREATE_GROUP, groupData),
 };
 
+// Teacher API
+export const teacherAPI = {
+  // Classes
+  createClass: (classData) => api.post('/api/teacher/classes', classData),
+  getClasses: (params) => api.get('/api/teacher/classes', { params }),
+  getClassDetails: (classId) => api.get(`/api/teacher/classes/${classId}`),
+  updateClass: (classId, updates) => api.put(`/api/teacher/classes/${classId}`, updates),
+  addStudent: (classId, studentData) => api.post(`/api/teacher/classes/${classId}/students`, studentData),
+  uploadMaterial: (classId, material) => api.post(`/api/teacher/classes/${classId}/materials`, material),
+  
+  // Assignments
+  createAssignment: (assignmentData) => api.post('/api/teacher/assignments', assignmentData),
+  getAssignments: (params) => api.get('/api/teacher/assignments', { params }),
+  getAssignmentDetails: (assignmentId) => api.get(`/api/teacher/assignments/${assignmentId}`),
+  gradeSubmission: (assignmentId, submissionId, gradeData) => 
+    api.post(`/api/teacher/assignments/${assignmentId}/submissions/${submissionId}/grade`, gradeData),
+  
+  // Attendance
+  createAttendance: (attendanceData) => api.post('/api/teacher/attendance', attendanceData),
+  markAttendance: (attendanceId, markData) => api.post(`/api/teacher/attendance/${attendanceId}/mark`, markData),
+  getClassAttendance: (classId, params) => api.get(`/api/teacher/attendance/class/${classId}`, { params }),
+  
+  // Analytics
+  getAnalytics: () => api.get('/api/teacher/analytics'),
+};
+
+// Coordinator API
+export const coordinatorAPI = {
+  // Clubs
+  createClub: (clubData) => api.post('/api/coordinator/clubs', clubData),
+  getClubs: () => api.get('/api/coordinator/clubs'),
+  getClubDetails: (clubId) => api.get(`/api/coordinator/clubs/${clubId}`),
+  addMember: (clubId, memberData) => api.post(`/api/coordinator/clubs/${clubId}/members`, memberData),
+  sendClubAnnouncement: (clubId, announcement) => 
+    api.post(`/api/coordinator/clubs/${clubId}/announcements`, announcement),
+  
+  // Events
+  createEvent: (eventData) => api.post('/api/coordinator/events', eventData),
+  getEvents: (params) => api.get('/api/coordinator/events', { params }),
+  getEventDetails: (eventId) => api.get(`/api/coordinator/events/${eventId}`),
+  updateEvent: (eventId, updates) => api.put(`/api/coordinator/events/${eventId}`, updates),
+  approveParticipant: (eventId, registrationId) => 
+    api.post(`/api/coordinator/events/${eventId}/registrations/${registrationId}/approve`),
+  rejectParticipant: (eventId, registrationId, reason) => 
+    api.post(`/api/coordinator/events/${eventId}/registrations/${registrationId}/reject`, { reason }),
+  sendEventAnnouncement: (eventId, announcement) => 
+    api.post(`/api/coordinator/events/${eventId}/announcements`, announcement),
+  
+  // Analytics
+  getAnalytics: () => api.get('/api/coordinator/analytics'),
+};
+
 export default {
   auth: authAPI,
   posts: postsAPI,
@@ -100,4 +152,6 @@ export default {
   notices: noticesAPI,
   quiz: quizAPI,
   chat: chatAPI,
+  teacher: teacherAPI,
+  coordinator: coordinatorAPI,
 };

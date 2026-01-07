@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import AgoraRTC from 'agora-rtc-sdk-ng';
-import { FaMicrophone, FaMicrophoneSlash, FaVideo, FaVideoSlash, FaPhoneSlash, FaDesktop, FaDownload, FaShare, FaExpand, FaCompress, FaRobot, FaVolumeUp, FaCopy, FaCheck, FaTimes } from 'react-icons/fa';
+import { FaMicrophone, FaMicrophoneSlash, FaVideo, FaVideoSlash, FaPhoneSlash, FaDesktop, FaDownload, FaShare, FaExpand, FaCompress, FaRobot, FaVolumeUp, FaCopy, FaCheck, FaTimes, FaComments, FaPaperPlane, FaUsers, FaHandPaper, FaSmile } from 'react-icons/fa';
 import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
 import API_CONFIG, { buildApiUrl } from '../config/api';
 import { io } from 'socket.io-client';
 import { useEffect as ReactUseEffect } from 'react';
 
-const VideoCall = ({ channelName, onClose, sessionId, roomTitle }) => {
+const VideoCall = ({ channelName, onClose, sessionId, roomTitle, userRole = 'student', userName = 'You', initialAgora }) => {
   const [users, setUsers] = useState([]);
   const [start, setStart] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -35,11 +35,20 @@ const VideoCall = ({ channelName, onClose, sessionId, roomTitle }) => {
   const [shareLink, setShareLink] = useState('');
   const [showShareModal, setShowShareModal] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [isParticipantsOpen, setIsParticipantsOpen] = useState(false);
+  const [raisedHand, setRaisedHand] = useState(false);
+  const [showReactions, setShowReactions] = useState(false);
+  const [captionsOn, setCaptionsOn] = useState(false);
+  const [captionsText, setCaptionsText] = useState('');
   const recognitionRef = useRef(null);
   const listenStreamRef = useRef(null);
   const audioCtxRef = useRef(null);
   const analyserRef = useRef(null);
   const rafRef = useRef(null);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // Copy to clipboard function
   const copyToClipboard = async (text) => {
@@ -77,7 +86,7 @@ const VideoCall = ({ channelName, onClose, sessionId, roomTitle }) => {
     }
   }, [sessionId, channelName]);
 
-  // Get Agora configuration from backend
+  // Initialize Agora configuration: prefer initial props (from join-session), else fetch token
   useEffect(() => {
     const getAgoraConfig = async () => {
       try {
@@ -89,35 +98,45 @@ const VideoCall = ({ channelName, onClose, sessionId, roomTitle }) => {
           uidRef.current = Math.floor(Math.random() * 100000);
         }
         const uid = uidRef.current;
-        
-        // Get token from backend using correct API endpoint
-        const response = await fetch(buildApiUrl('/api/videocall/generate-token'), {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            channelName: channelName || 'default-channel',
-            uid: uid.toString(),
-            role: 'publisher'
-          })
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success) {
-            setAgoraConfig({
-              appId: data.appId,
-              token: data.token,
-              channelName: data.channelName,
-              uid: data.uid
-            });
-            console.log('✅ Agora config received:', data);
-          } else {
-            throw new Error(data.error || 'Failed to get Agora configuration');
-          }
+        // Prefer initial config provided via props (from join-session)
+        if (initialAgora && initialAgora.appId && initialAgora.token && initialAgora.channelName) {
+          setAgoraConfig({
+            appId: initialAgora.appId,
+            token: initialAgora.token,
+            channelName: initialAgora.channelName,
+            uid: String(initialAgora.uid || uid)
+          });
+          console.log('✅ Using initial Agora config from join-session');
         } else {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          // Get token from backend using correct API endpoint
+          const response = await fetch(buildApiUrl('/api/videocall/generate-token'), {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              channelName: channelName || 'default-channel',
+              uid: uid.toString(),
+              role: 'publisher'
+            })
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            if (data.success) {
+              setAgoraConfig({
+                appId: data.appId,
+                token: data.token,
+                channelName: data.channelName,
+                uid: data.uid
+              });
+              console.log('✅ Agora config received:', data);
+            } else {
+              throw new Error(data.error || 'Failed to get Agora configuration');
+            }
+          } else {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
         }
       } catch (error) {
         console.error('❌ Failed to get Agora config:', error);
@@ -126,9 +145,8 @@ const VideoCall = ({ channelName, onClose, sessionId, roomTitle }) => {
         setIsLoading(false);
       }
     };
-
     getAgoraConfig();
-  }, [channelName]);
+  }, [channelName, initialAgora]);
 
   // Check camera and microphone permissions
   useEffect(() => {
@@ -303,6 +321,43 @@ const VideoCall = ({ channelName, onClose, sessionId, roomTitle }) => {
     } catch (_) {}
   };
 
+  // Live captions (local, browser SR)
+  const toggleCaptions = () => {
+    try {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) {
+        toast.error('Live captions not supported in this browser');
+        return;
+      }
+      if (!captionsOn) {
+        const rec = new SR();
+        rec.lang = 'en-US';
+        rec.interimResults = true;
+        rec.continuous = true;
+        rec.onresult = (e) => {
+          let text = '';
+          for (let i = e.resultIndex; i < e.results.length; i++) {
+            const t = e.results[i][0]?.transcript || '';
+            text += t + ' ';
+          }
+          setCaptionsText(text.trim());
+        };
+        rec.onerror = () => {};
+        recognitionRef.current = rec;
+        try { rec.start(); } catch (_) {}
+        setCaptionsOn(true);
+        toast.info('Captions enabled');
+      } else {
+        try { recognitionRef.current?.stop(); } catch (_) {}
+        setCaptionsOn(false);
+        setCaptionsText('');
+        toast.info('Captions disabled');
+      }
+    } catch (e) {
+      console.error('Captions error', e);
+    }
+  };
+
   // Initialize Agora client and join channel
   useEffect(() => {
     let init = async () => {
@@ -392,6 +447,40 @@ const VideoCall = ({ channelName, onClose, sessionId, roomTitle }) => {
           socketRef.current.on('user-left', () => {
             setParticipantCount((prev) => Math.max(1, prev - 1));
           });
+          // Meeting chat messages
+          socketRef.current.on('new-message', (data) => {
+            setChatMessages((prev) => {
+              const next = [...prev, data];
+              return next;
+            });
+            // Increment unread when chat panel is closed
+            setUnreadCount((c) => (isChatOpen ? c : c + 1));
+          });
+          // Raise hand indicator
+          socketRef.current.on('hand-raised', (data) => {
+            toast.info(`${data.userId} ${data.raised ? 'raised' : 'lowered'} their hand`);
+          });
+          // Mute-all command from host
+          socketRef.current.on('mute-all', () => {
+            try {
+              if (localAudioTrackRef.current) {
+                localAudioTrackRef.current.setEnabled(false);
+                setIsMuted(true);
+                toast.warn('Host muted everyone');
+              }
+            } catch (_) {}
+          });
+          // Meeting ended by host
+          socketRef.current.on('meeting-ended', () => {
+            toast.warn('Meeting ended by host');
+            leaveCall();
+          });
+          // Emoji reactions overlay (simple toast for now)
+          socketRef.current.on('reaction', (data) => {
+            if (String(data.userId) !== String(agoraConfig.uid)) {
+              toast.info(`Reaction: ${data.emoji}`);
+            }
+          });
         } catch (e) {
           console.error('[Socket] connect/join failed', e);
         }
@@ -425,6 +514,107 @@ const VideoCall = ({ channelName, onClose, sessionId, roomTitle }) => {
       }
     };
   }, []);
+
+  const sendChatMessage = () => {
+    try {
+      const text = chatInput.trim();
+      if (!text) return;
+      if (!socketRef.current || !agoraConfig?.channelName) {
+        toast.error('Chat not connected');
+        return;
+      }
+      const payload = {
+        roomId: agoraConfig.channelName,
+        userId: String(agoraConfig.uid),
+        text,
+        timestamp: Date.now(),
+      };
+      socketRef.current.emit('send-message', payload);
+      // Also append locally for instant feedback
+      setChatMessages((prev) => [...prev, { ...payload, self: true }]);
+      setChatInput('');
+    } catch (e) {
+      console.error('send message error', e);
+      toast.error('Failed to send message');
+    }
+  };
+
+  // Raise/lower hand
+  const toggleRaiseHand = () => {
+    if (!socketRef.current || !agoraConfig?.channelName) return;
+    const next = !raisedHand;
+    setRaisedHand(next);
+    socketRef.current.emit('raise-hand', {
+      roomId: agoraConfig.channelName,
+      userId: String(agoraConfig.uid),
+      raised: next,
+    });
+  };
+
+  // Send emoji reaction
+  const sendReaction = (emoji) => {
+    setShowReactions(false);
+    if (!socketRef.current || !agoraConfig?.channelName) return;
+    const payload = { roomId: agoraConfig.channelName, userId: String(agoraConfig.uid), emoji, timestamp: Date.now() };
+    socketRef.current.emit('reaction', payload);
+    // local feedback
+    toast.info(`You reacted ${emoji}`);
+  };
+
+  // Host: mute all
+  const hostMuteAll = () => {
+    if (userRole !== 'instructor') return;
+    if (!socketRef.current || !agoraConfig?.channelName) return;
+    socketRef.current.emit('host-mute-all', { roomId: agoraConfig.channelName, hostId: String(agoraConfig.uid) });
+    toast.info('Muted all participants');
+  };
+
+  // Host: end meeting
+  const hostEndMeeting = () => {
+    if (userRole !== 'instructor') return;
+    if (!socketRef.current || !agoraConfig?.channelName) return;
+    socketRef.current.emit('host-end-meeting', { roomId: agoraConfig.channelName, hostId: String(agoraConfig.uid) });
+    leaveCall();
+  };
+
+  // Host: lock/unlock meeting (backend settings)
+  const hostToggleLock = async () => {
+    if (userRole !== 'instructor' || !sessionId) return;
+    try {
+      const resp = await fetch(buildApiUrl(`/api/videocall/session/${sessionId}/settings`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings: { isLocked: true } })
+      });
+      const data = await resp.json();
+      if (data.success) {
+        toast.success('Meeting locked');
+      } else {
+        throw new Error(data.error || 'Failed to lock meeting');
+      }
+    } catch (e) {
+      toast.error(e.message);
+    }
+  };
+
+  const hostUnlock = async () => {
+    if (userRole !== 'instructor' || !sessionId) return;
+    try {
+      const resp = await fetch(buildApiUrl(`/api/videocall/session/${sessionId}/settings`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings: { isLocked: false } })
+      });
+      const data = await resp.json();
+      if (data.success) {
+        toast.success('Meeting unlocked');
+      } else {
+        throw new Error(data.error || 'Failed to unlock meeting');
+      }
+    } catch (e) {
+      toast.error(e.message);
+    }
+  };
 
   // Toggle mute
   const toggleMute = async () => {
@@ -841,7 +1031,7 @@ const VideoCall = ({ channelName, onClose, sessionId, roomTitle }) => {
                        localVideoTrackRef.current.play(el);
                      }
                    }}
-                   className="w-full h-96 object-cover"
+                   className="w-full h-96 object-contain bg-black"
                  />
                )}
                
@@ -858,31 +1048,33 @@ const VideoCall = ({ channelName, onClose, sessionId, roomTitle }) => {
                </div>
              </div>
 
-             {/* Small Local Video Tab (like Zoom) - Always visible */}
-             <div className="relative bg-black rounded-lg overflow-hidden w-48 h-32">
-               <div
-                 ref={(el) => {
-                   if (el && localVideoTrackRef.current) {
-                     localVideoTrackRef.current.play(el);
-                   }
-                 }}
-                 className="w-full h-full object-cover"
-               />
-               <div className="absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-xs">
-                 You
+             {/* Small Local Video Tab (like Zoom) - only when there are remote users or screen share */}
+             {(users.length > 0 || isScreenSharing) && (
+               <div className="relative bg-black rounded-lg overflow-hidden w-48 h-32">
+                 <div
+                   ref={(el) => {
+                     if (el && localVideoTrackRef.current) {
+                       localVideoTrackRef.current.play(el);
+                     }
+                   }}
+                   className="w-full h-full object-cover"
+                 />
+                 <div className="absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-xs">
+                   You
+                 </div>
                </div>
-             </div>
+             )}
 
             {/* Remote Videos */}
             {users.map((user) => (
               <div key={user.uid} className="relative bg-black rounded-lg overflow-hidden">
-                <div
+                 <div
                   ref={(el) => {
                     if (el && user.videoTrack) {
                       user.videoTrack.play(el);
                     }
                   }}
-                  className="w-full h-64 object-cover"
+                  className="w-full h-64 object-contain bg-black"
                 />
                 <div className="absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-sm">
                   User {user.uid}
@@ -1004,6 +1196,20 @@ const VideoCall = ({ channelName, onClose, sessionId, roomTitle }) => {
             <FaShare size={20} />
           </motion.button>
 
+          {/* Chat Toggle */}
+          <motion.button
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => { setIsChatOpen((o) => !o); setUnreadCount(0); }}
+            className={`relative p-4 rounded-full text-white transition-colors ${isChatOpen ? 'bg-blue-600' : 'bg-gray-600 hover:bg-gray-700'}`}
+            title="Meeting Chat"
+          >
+            <FaComments size={20} />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs rounded-full px-1">{unreadCount}</span>
+            )}
+          </motion.button>
+
           {/* AI Assist */}
           <motion.button
             whileHover={{ scale: 1.1 }}
@@ -1014,6 +1220,71 @@ const VideoCall = ({ channelName, onClose, sessionId, roomTitle }) => {
           >
             <FaRobot size={20} />
           </motion.button>
+
+          {/* Raise Hand */}
+          <motion.button
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={toggleRaiseHand}
+            className={`p-4 rounded-full text-white transition-colors ${raisedHand ? 'bg-yellow-600' : 'bg-gray-600 hover:bg-gray-700'}`}
+            title={raisedHand ? 'Lower Hand' : 'Raise Hand'}
+          >
+            <FaHandPaper size={20} />
+          </motion.button>
+
+          {/* Reactions */}
+          <div className="relative">
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={() => setShowReactions((s) => !s)}
+              className="p-4 rounded-full bg-gray-600 hover:bg-gray-700 text-white transition-colors"
+              title="Send Reaction"
+            >
+              <FaSmile size={20} />
+            </motion.button>
+            {showReactions && (
+              <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-white rounded-lg shadow-lg p-2 flex gap-2">
+                {['👍','👏','🎉','😂','❤️'].map((e) => (
+                  <button key={e} onClick={() => sendReaction(e)} className="px-2 py-1 hover:bg-gray-100 rounded">
+                    {e}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Participants List Toggle */}
+          <motion.button
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => setIsParticipantsOpen((o) => !o)}
+            className={`p-4 rounded-full text-white transition-colors ${isParticipantsOpen ? 'bg-blue-600' : 'bg-gray-600 hover:bg-gray-700'}`}
+            title="Participants"
+          >
+            <FaUsers size={20} />
+          </motion.button>
+
+          {/* Captions toggle */}
+          <motion.button
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={toggleCaptions}
+            className={`p-4 rounded-full text-white transition-colors ${captionsOn ? 'bg-blue-600' : 'bg-gray-600 hover:bg-gray-700'}`}
+            title={captionsOn ? 'Disable Captions' : 'Enable Captions'}
+          >
+            CC
+          </motion.button>
+
+          {/* Host Controls */}
+          {userRole === 'instructor' && (
+            <div className="flex items-center gap-2 ml-2">
+              <button onClick={hostMuteAll} className="px-3 py-2 rounded bg-gray-700 text-white" title="Mute All">Mute All</button>
+              <button onClick={hostToggleLock} className="px-3 py-2 rounded bg-gray-700 text-white" title="Lock Meeting">Lock</button>
+              <button onClick={hostUnlock} className="px-3 py-2 rounded bg-gray-700 text-white" title="Unlock Meeting">Unlock</button>
+              <button onClick={hostEndMeeting} className="px-3 py-2 rounded bg-red-600 text-white" title="End Meeting">End</button>
+            </div>
+          )}
 
           {/* Fullscreen Button */}
           <motion.button
@@ -1042,11 +1313,103 @@ const VideoCall = ({ channelName, onClose, sessionId, roomTitle }) => {
         setSpeakEnabled={setSpeakEnabled}
         listenLevel={listenLevel}
       />
+
+      {/* Meeting Chat sidebar */}
+      <MeetingChat
+        open={isChatOpen}
+        messages={chatMessages}
+        meId={agoraConfig?.uid}
+        onClose={() => setIsChatOpen(false)}
+        value={chatInput}
+        onChange={setChatInput}
+        onSend={sendChatMessage}
+      />
+      {/* Participants Sidebar */}
+      <ParticipantsPanel
+        open={isParticipantsOpen}
+        users={users}
+        localLabel={userName}
+        meId={agoraConfig?.uid}
+        raisedHand={raisedHand}
+        onClose={() => setIsParticipantsOpen(false)}
+      />
+
+      {/* Captions panel (local) */}
+      {captionsOn && (
+        <div className="absolute top-24 left-1/2 -translate-x-1/2 z-40 bg-black/70 text-white px-3 py-2 rounded">
+          <span className="text-sm">{captionsText || 'Listening...'}</span>
+        </div>
+      )}
     </div>
   );
 };
 
 export default VideoCall;
+
+// Meeting chat sidebar inside the call UI
+function MeetingChat({ open, messages, meId, onClose, value, onChange, onSend }) {
+  if (!open) return null;
+  return (
+    <div className="absolute bottom-28 right-4 z-40 w-96 bg-white/95 backdrop-blur rounded-xl shadow-lg border border-gray-200">
+      <div className="flex items-center justify-between px-4 py-2 bg-gray-900 text-white rounded-t-xl">
+        <div className="flex items-center gap-2"><FaComments /> <span className="font-semibold">Meeting Chat</span></div>
+        <button onClick={onClose} className="text-sm px-2 py-1 bg-red-600 rounded">Close</button>
+      </div>
+      <div className="p-3 h-64 overflow-y-auto space-y-2">
+        {messages.length === 0 && (
+          <div className="text-sm text-gray-500">No messages yet. Say hi to everyone!</div>
+        )}
+        {messages.map((m, idx) => (
+          <div key={idx} className={`px-3 py-2 rounded ${m.userId === String(meId) || m.self ? 'bg-blue-50' : 'bg-gray-100'}`}>
+            <div className="text-xs text-gray-500 flex justify-between">
+              <span>{m.userId === String(meId) || m.self ? 'You' : m.userId}</span>
+              <span>{new Date(m.timestamp || Date.now()).toLocaleTimeString()}</span>
+            </div>
+            <div className="text-sm text-gray-900 whitespace-pre-wrap">{m.text}</div>
+          </div>
+        ))}
+      </div>
+      <div className="p-3 border-t bg-gray-50 flex gap-2">
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') onSend(); }}
+          placeholder="Type a message..."
+          className="flex-1 p-2 border rounded"
+        />
+        <button onClick={onSend} className="px-3 py-2 rounded text-white bg-blue-600 flex items-center gap-2">
+          <FaPaperPlane />
+          Send
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Participants panel
+function ParticipantsPanel({ open, users, localLabel, meId, raisedHand, onClose }) {
+  if (!open) return null;
+  const items = [
+    { uid: String(meId), label: `${localLabel} (You)`, hand: raisedHand },
+    ...users.map((u) => ({ uid: String(u.uid), label: `User ${u.uid}`, hand: false }))
+  ];
+  return (
+    <div className="absolute top-20 right-4 z-40 w-80 bg-white/95 backdrop-blur rounded-xl shadow-lg border border-gray-200">
+      <div className="flex items-center justify-between px-4 py-2 bg-gray-900 text-white rounded-t-xl">
+        <div className="flex items-center gap-2"><FaUsers /> <span className="font-semibold">Participants</span></div>
+        <button onClick={onClose} className="text-sm px-2 py-1 bg-red-600 rounded">Close</button>
+      </div>
+      <div className="p-3 max-h-72 overflow-y-auto space-y-2">
+        {items.map((p) => (
+          <div key={p.uid} className="flex items-center justify-between bg-gray-100 rounded px-3 py-2">
+            <span className="text-sm text-gray-900">{p.label}</span>
+            {p.hand && <span className="text-yellow-600 text-sm">✋</span>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 // Enhanced whiteboard overlay component with shortcuts and more tools
 function WhiteboardOverlay({ onClose }) {

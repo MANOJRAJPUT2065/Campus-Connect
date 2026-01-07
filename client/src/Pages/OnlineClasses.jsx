@@ -7,156 +7,121 @@ import { toast } from 'react-toastify';
 import { buildApiUrl } from '../config/api';
 
 const OnlineClasses = () => {
-  const [classes, setClasses] = useState([
-    {
-      id: 1,
-      title: "Introduction to Computer Science",
-      instructor: "Dr. Sarah Johnson",
-      time: "10:00 AM - 11:30 AM",
-      date: "2024-01-15",
-      duration: "90 min",
-      participants: 24,
-      maxParticipants: 30,
-      status: "upcoming",
-      meetingId: "cs101-intro",
-      isLive: false
-    },
-    {
-      id: 2,
-      title: "Advanced Mathematics",
-      instructor: "Prof. Michael Chen",
-      time: "2:00 PM - 3:30 PM",
-      date: "2024-01-15",
-      duration: "90 min",
-      participants: 18,
-      maxParticipants: 25,
-      status: "live",
-      meetingId: "math201-advanced",
-      isLive: true
-    },
-    {
-      id: 3,
-      title: "English Literature",
-      instructor: "Dr. Emily Davis",
-      time: "4:00 PM - 5:00 PM",
-      date: "2024-01-15",
-      duration: "60 min",
-      participants: 22,
-      maxParticipants: 28,
-      status: "upcoming",
-      meetingId: "eng101-literature",
-      isLive: false
-    }
-  ]);
+  const [classes, setClasses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const [selectedClass, setSelectedClass] = useState(null);
   const [showVideoCall, setShowVideoCall] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [isInstructor, setIsInstructor] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [isInstructor] = useState(false);
+  const [userRole, setUserRole] = useState(null);
+
+  // Fetch sessions/classes based on role (teacher => own classes, students => live sessions, fallback => events)
+  const fetchEvents = async () => {
+    try {
+      setLoading(true);
+      const role = localStorage.getItem('userRole');
+      setUserRole(role);
+
+      // Decide primary endpoint by role
+      let url = '';
+      let list = [];
+
+      if (role === 'teacher') {
+        const storedUser = localStorage.getItem('user');
+        const parsedUser = storedUser ? JSON.parse(storedUser) : {};
+        const instructorId = parsedUser.email || parsedUser.usn || parsedUser._id || parsedUser.id;
+        if (!instructorId) {
+          setError('Unable to identify instructor. Please re-login.');
+          setLoading(false);
+          return;
+        }
+        url = buildApiUrl(`/api/sessions/teacher/${encodeURIComponent(instructorId)}`);
+      } else {
+        url = buildApiUrl('/api/sessions/live');
+      }
+
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      const data = await response.json();
+
+      // Extract list based on expected shapes
+      if (Array.isArray(data?.sessions)) {
+        list = data.sessions; // teacher or live sessions
+      } else if (Array.isArray(data)) {
+        list = data;
+      }
+
+      // If student/guest and no live sessions, fallback to events list
+      if (!list?.length && role !== 'teacher') {
+        const eventsResp = await fetch(buildApiUrl('/events/getEvents'));
+        const eventsData = await eventsResp.json();
+        if (Array.isArray(eventsData?.events)) list = eventsData.events;
+        else if (Array.isArray(eventsData)) list = eventsData;
+      }
+
+      if (list?.length) {
+        const formattedClasses = list.map((item) => {
+          const isSession = Boolean(item.channelName);
+          const participantsCount = item.participants?.length || item.enrolledStudents?.length || 0;
+          const maxP = item.maxParticipants || item.maxStudents || 50;
+          const rawStatus = item.status || (isSession ? 'live' : 'upcoming');
+          const normalizedStatus = rawStatus === 'active' ? 'upcoming' : rawStatus;
+
+          return {
+            id: item._id || item.id,
+            title: item.title || item.className || item.channelName || 'Session',
+            instructor: item.instructorName || item.teacherName || item.instructor || 'Instructor',
+            time: item.time || item.startTime || item.schedule?.[0]?.time || 'TBD',
+            date: item.date || item.startTime || item.schedule?.[0]?.date || new Date().toISOString().split('T')[0],
+            duration: item.duration || '60 min',
+            participants: participantsCount,
+            maxParticipants: maxP,
+            status: normalizedStatus,
+            meetingId: item.channelName || item._id || item.id,
+            isLive: normalizedStatus === 'live',
+            description: item.description
+          };
+        });
+        setClasses(formattedClasses);
+        setError(null);
+      } else {
+        setClasses([]);
+      }
+    } catch (err) {
+      console.error('Error fetching events:', err);
+      setError('Failed to load classes. Please try again later.');
+      setClasses([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    // Check if user is instructor (you can implement your own logic)
-    const userRole = localStorage.getItem('userRole');
-    setIsInstructor(userRole === 'instructor');
+    // Fetch events from backend
+    fetchEvents();
   }, []);
 
   const joinClass = (classItem) => {
-    // Create session if it doesn't exist, then join
-    createAndJoinSession(classItem);
-  };
-
-  const createAndJoinSession = async (classItem) => {
-    try {
-      const token = localStorage.getItem('token');
-      let userInfo = null;
-      if (token) {
-        try {
-          const decoded = JSON.parse(atob(token.split('.')[1]));
-          userInfo = {
-            userId: decoded.email || decoded.usn,
-            userName: decoded.username || 'User'
-          };
-        } catch (e) {}
-      }
-
-      // Create session
-      const response = await fetch(buildApiUrl('/api/videocall/create-session'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          title: classItem.title,
-          instructorId: userInfo?.userId || 'instructor',
-          instructorName: userInfo?.userName || 'Instructor',
-          maxParticipants: classItem.maxParticipants || 50
-        })
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        // Navigate to join page with session ID
-        window.location.href = `/video-call/join/${data.session.id}`;
-      } else {
-        toast.error('Failed to create session');
-      }
-    } catch (err) {
-      console.error('Error creating session:', err);
-      toast.error('Failed to create session');
+    const meetingId = classItem.meetingId || classItem.id;
+    if (!meetingId) {
+      toast.error('Class is not ready to join yet');
+      return;
     }
-  };
-
-  const startClass = async (classItem) => {
-    if (isInstructor) {
-      try {
-        const token = localStorage.getItem('token');
-        let userInfo = null;
-        if (token) {
-          try {
-            const decoded = JSON.parse(atob(token.split('.')[1]));
-            userInfo = {
-              userId: decoded.email || decoded.usn,
-              userName: decoded.username || 'Instructor'
-            };
-          } catch (e) {}
-        }
-
-        // Create session for instructor
-        const response = await fetch(buildApiUrl('/api/videocall/create-session'), {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            title: classItem.title,
-            instructorId: userInfo?.userId || 'instructor',
-            instructorName: userInfo?.userName || 'Instructor',
-            maxParticipants: classItem.maxParticipants || 50
-          })
-        });
-
-        const data = await response.json();
-        if (data.success) {
-          // Navigate to video call with session info
-          window.location.href = `/video-call/join/${data.session.id}`;
-          toast.success(`Starting class: ${classItem.title}`);
-        } else {
-          toast.error('Failed to create session');
-        }
-      } catch (err) {
-        console.error('Error starting class:', err);
-        toast.error('Failed to start class');
-      }
-    } else {
-      toast.error('Only instructors can start classes');
-    }
+    window.location.href = `/video-call/join/${meetingId}`;
   };
 
   const filteredClasses = classes.filter(classItem => {
-    const matchesSearch = classItem.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         classItem.instructor.toLowerCase().includes(searchTerm.toLowerCase());
+    const t = (classItem?.title || '').toLowerCase();
+    const inst = (classItem?.instructor || '').toLowerCase();
+    const q = (searchTerm || '').toLowerCase();
+    const matchesSearch = t.includes(q) || inst.includes(q);
     const matchesFilter = filterStatus === 'all' || classItem.status === filterStatus;
     return matchesSearch && matchesFilter;
   });
@@ -214,17 +179,6 @@ const OnlineClasses = () => {
                   3
                 </span>
               </motion.button>
-              
-              {isInstructor && (
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  className="px-6 py-3 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-colors flex items-center space-x-2"
-                >
-                  <FaVideo />
-                  <span>Schedule Class</span>
-                </motion.button>
-              )}
             </div>
           </div>
 
@@ -264,6 +218,32 @@ const OnlineClasses = () => {
         </motion.div>
 
         {/* Classes Grid */}
+        {loading && (
+          <div className="flex justify-center items-center min-h-64">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+          </div>
+        )}
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 text-red-700">
+            <p className="font-semibold">Error loading events:</p>
+            <p className="text-sm mt-1">{error}</p>
+            <button 
+              onClick={fetchEvents}
+              className="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {!loading && classes.length === 0 && !error && (
+          <div className="text-center py-12 bg-white rounded-xl">
+            <p className="text-gray-500 text-lg">📅 {userRole === 'teacher' ? 'No classes created yet' : 'No events scheduled yet'}</p>
+            <p className="text-gray-400 text-sm mt-2">{userRole === 'teacher' ? 'Create a class to get started.' : 'Classes will appear here once created.'}</p>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <AnimatePresence>
             {filteredClasses.map((classItem, index) => (
@@ -318,41 +298,15 @@ const OnlineClasses = () => {
 
                   {/* Action Buttons */}
                   <div className="flex gap-3">
-                    {classItem.isLive ? (
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => joinClass(classItem)}
-                        className="flex-1 bg-red-500 text-white py-3 px-4 rounded-xl hover:bg-red-600 transition-colors flex items-center justify-center space-x-2"
-                      >
-                        <FaPlay />
-                        <span>Join Live</span>
-                      </motion.button>
-                    ) : (
-                      <>
-                        {isInstructor ? (
-                          <motion.button
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            onClick={() => startClass(classItem)}
-                            className="flex-1 bg-green-500 text-white py-3 px-4 rounded-xl hover:bg-green-600 transition-colors flex items-center justify-center space-x-2"
-                          >
-                            <FaPlay />
-                            <span>Start Class</span>
-                          </motion.button>
-                        ) : (
-                          <motion.button
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            onClick={() => joinClass(classItem)}
-                            className="flex-1 bg-blue-500 text-white py-3 px-4 rounded-xl hover:bg-blue-600 transition-colors flex items-center justify-center space-x-2"
-                          >
-                            <FaVideo />
-                            <span>Join Class</span>
-                          </motion.button>
-                        )}
-                      </>
-                    )}
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => joinClass(classItem)}
+                      className={`flex-1 ${classItem.isLive ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-500 hover:bg-blue-600'} text-white py-3 px-4 rounded-xl transition-colors flex items-center justify-center space-x-2`}
+                    >
+                      <FaVideo />
+                      <span>{classItem.isLive ? 'Join Live' : 'Join Class'}</span>
+                    </motion.button>
                     
                     <motion.button
                       whileHover={{ scale: 1.05 }}

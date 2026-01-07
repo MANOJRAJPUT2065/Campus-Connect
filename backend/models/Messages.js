@@ -4,13 +4,13 @@ const messageSchema = new mongoose.Schema(
   {
     senderId: {
       type: String,
-      ref: "User",
       required: true,
+      index: true
     },
     receiverId: {
       type: String,
-      ref: "User",
       required: true,
+      index: true
     },
     message: {
       type: String,
@@ -19,6 +19,9 @@ const messageSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// Compound index for faster queries
+messageSchema.index({ senderId: 1, receiverId: 1 });
 
 const Message = mongoose.model("Message", messageSchema);
 

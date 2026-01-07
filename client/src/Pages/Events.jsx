@@ -117,17 +117,10 @@
 
 // export default Events;
 
-import { useNavigate } from 'react-router-dom';
 import EventList from '../Components/EventList';
 import { motion } from 'framer-motion';
 
 const Events = () => {
-  const navigate = useNavigate();
-
-  const handleAddNewEvent = () => {
-    navigate('/addEvent');
-  };
-
   return (
     <motion.div
       className="EventsContainer w-full flex flex-col justify-center items-center gap-5 p-8"
@@ -135,21 +128,12 @@ const Events = () => {
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.5, ease: "easeOut" }}
     >
-      {/* Add New Event Button */}
-      <motion.div
-        className="mb-6"
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-      >
-        <button
-          onClick={handleAddNewEvent}
-          className="px-6 py-3 bg-green-600 text-white font-semibold rounded shadow-lg hover:bg-green-700 transition-colors duration-300"
-        >
-          Add New Event
-        </button>
-      </motion.div>
+      {/* Student view: browse and register only */}
+      <div className="mb-2 text-center">
+        <h2 className="text-2xl font-bold text-gray-800">Campus Events</h2>
+        <p className="text-gray-600 text-sm">Browse and register for events. Creation is coordinator-only.</p>
+      </div>
 
-      {/* EventList Component */}
       <EventList />
     </motion.div>
   );

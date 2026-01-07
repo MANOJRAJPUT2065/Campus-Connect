@@ -14,6 +14,8 @@ import {
 } from "react-icons/fa";
 import { toast } from "react-toastify";
 import axios from "axios";
+import { buildApiUrl } from "../config/api";
+import { jwtDecode } from "jwt-decode";
 
 const ChatSystem = () => {
   const [chats, setChats] = useState([]);
@@ -25,96 +27,93 @@ const ChatSystem = () => {
   const [users, setUsers] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [isTyping, setIsTyping] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   // file upload
   const fileInputRef = useRef(null);
   const imageInputRef = useRef(null);
   const messagesEndRef = useRef(null);
 
-  // 🔹 Load sample data
+  // 🔹 Get current user from JWT
   useEffect(() => {
     try {
       const token = localStorage.getItem("token");
       if (token) {
-        const decoded = JSON.parse(atob(token.split(".")[1]));
+        const decoded = jwtDecode(token);
         setCurrentUser({
-          id: decoded.id || "user1",
-          name: decoded.name || "Current User",
-          email: decoded.email || "user@example.com",
-          avatar: decoded.avatar || "https://via.placeholder.com/40",
+          id: decoded.email || decoded.usn,
+          email: decoded.email,
+          name: decoded.username || "User",
+          role: decoded.role,
+          avatar: `https://ui-avatars.com/api/?name=${decoded.username || "User"}&background=random`,
         });
+        fetchChats(decoded.email || decoded.usn);
+        fetchUsers();
+      } else {
+        toast.error("Please log in first");
       }
     } catch (error) {
       console.error("Error parsing token:", error);
+      toast.error("Authentication error");
     }
-
-    const sampleChats = [
-      {
-        id: "chat1",
-        name: "Study Group - Algorithms",
-        lastMessage: "Anyone up for a quick review?",
-        timestamp: "2 min ago",
-        unreadCount: 3,
-        avatar: "https://via.placeholder.com/40/4F46E5/FFFFFF?text=SG",
-        isGroup: true,
-        members: ["user1", "user2", "user3", "user4"],
-      },
-      {
-        id: "chat2",
-        name: "John Doe",
-        lastMessage: "Thanks for the notes!",
-        timestamp: "1 hour ago",
-        unreadCount: 0,
-        avatar: "https://via.placeholder.com/40/10B981/FFFFFF?text=JD",
-        isGroup: false,
-        members: ["user1", "user2"],
-      },
-    ];
-    setChats(sampleChats);
-
-    const sampleUsers = [
-      {
-        id: "user2",
-        name: "John Doe",
-        email: "john@example.com",
-        avatar:
-          "https://via.placeholder.com/40/10B981/FFFFFF?text=JD",
-      },
-      {
-        id: "user3",
-        name: "Jane Smith",
-        email: "jane@example.com",
-        avatar:
-          "https://via.placeholder.com/40/8B5CF6/FFFFFF?text=JS",
-      },
-    ];
-    setUsers(sampleUsers);
   }, []);
+
+  // 🔹 Fetch chats for current user
+  const fetchChats = async (userId) => {
+    try {
+      const response = await fetch(buildApiUrl(`/api/messages/chats?userId=${userId}`), {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setChats(Array.isArray(data) ? data : data.chats || []);
+      }
+    } catch (error) {
+      console.error("Error fetching chats:", error);
+    }
+  };
+
+  // 🔹 Fetch all users for starting new chat
+  const fetchUsers = async () => {
+    try {
+      const response = await fetch(buildApiUrl("/api/users/all"), {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setUsers(Array.isArray(data) ? data : data.users || []);
+      }
+    } catch (error) {
+      console.error("Error fetching users:", error);
+    }
+  };
 
   // 🔹 Load messages when chat is selected
   useEffect(() => {
     if (selectedChat) {
-      const sampleMessages = [
-        {
-          id: "msg1",
-          sender: "user2",
-          senderName: "John Doe",
-          content: "Hey everyone! How's the studying going?",
-          timestamp: "10:30 AM",
-          type: "text",
-        },
-        {
-          id: "msg2",
-          sender: "user1",
-          senderName: "Current User",
-          content: "Pretty good! Just finished the algorithms chapter.",
-          timestamp: "10:32 AM",
-          type: "text",
-        },
-      ];
-      setMessages(sampleMessages);
+      fetchMessages(selectedChat);
     }
   }, [selectedChat]);
+
+  // 🔹 Fetch messages for selected chat
+  const fetchMessages = async (chat) => {
+    try {
+      setLoading(true);
+      const response = await fetch(
+        buildApiUrl(`/api/messages/getMessages?senderId=${currentUser.id}&receiverId=${chat.participantId}`),
+        { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setMessages(Array.isArray(data) ? data : data.messages || []);
+      }
+    } catch (error) {
+      console.error("Error fetching messages:", error);
+      toast.error("Failed to load messages");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // 🔹 Scroll to bottom
   useEffect(() => {
@@ -122,31 +121,43 @@ const ChatSystem = () => {
   }, [messages]);
 
   // 🔹 Send text message
-  const handleSendMessage = () => {
-    if (!newMessage.trim() || !selectedChat) return;
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() || !selectedChat || !currentUser) return;
 
-    const message = {
-      id: `msg${Date.now()}`,
-      sender: currentUser?.id || "user1",
-      senderName: currentUser?.name || "Current User",
-      content: newMessage,
-      timestamp: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      type: "text",
-    };
+    try {
+      setLoading(true);
+      const response = await fetch(buildApiUrl("/api/messages/send"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({
+          senderId: currentUser.id,
+          receiverId: selectedChat.participantId,
+          message: newMessage,
+        }),
+      });
 
-    setMessages((prev) => [...prev, message]);
-    setNewMessage("");
-    setChats((prev) =>
-      prev.map((chat) =>
-        chat.id === selectedChat.id
-          ? { ...chat, lastMessage: newMessage, timestamp: "Just now" }
-          : chat
-      )
-    );
-    toast.success("Message sent!");
+      if (response.ok) {
+        const message = {
+          senderId: currentUser.id,
+          receiverId: selectedChat.participantId,
+          message: newMessage,
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, message]);
+        setNewMessage("");
+        toast.success("Message sent!");
+      } else {
+        toast.error("Failed to send message");
+      }
+    } catch (error) {
+      console.error("Error sending message:", error);
+      toast.error("Error sending message");
+    } finally {
+      setLoading(false);
+    }
   };
 
   // 🔹 Upload file (Cloudinary example)
@@ -219,6 +230,23 @@ const ChatSystem = () => {
     chat.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // 🔹 Start new chat
+  const startNewChat = async (user) => {
+    const newChat = {
+      participantId: user.email,
+      name: user.username,
+      email: user.email,
+      avatar: `https://ui-avatars.com/api/?name=${user.username}&background=random`,
+      lastMessage: 'No messages yet',
+      timestamp: new Date(),
+      isGroup: false,
+    };
+    
+    setSelectedChat(newChat);
+    setShowNewChat(false);
+    setMessages([]);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto h-screen flex">
@@ -251,30 +279,36 @@ const ChatSystem = () => {
 
           {/* Chat list */}
           <div className="flex-1 overflow-y-auto">
-            {filteredChats.map((chat) => (
-              <motion.div
-                key={chat.id}
-                whileHover={{ backgroundColor: "#f9fafb" }}
-                onClick={() => setSelectedChat(chat)}
-                className={`p-4 border-b cursor-pointer ${
-                  selectedChat?.id === chat.id ? "bg-blue-50" : ""
-                }`}
-              >
-                <div className="flex items-center space-x-3">
-                  <img
-                    src={chat.avatar}
-                    alt={chat.name}
-                    className="w-12 h-12 rounded-full"
-                  />
-                  <div className="flex-1">
-                    <h3 className="font-semibold">{chat.name}</h3>
-                    <p className="text-sm text-gray-600">
-                      {chat.lastMessage}
-                    </p>
+            {filteredChats.length > 0 ? (
+              filteredChats.map((chat) => (
+                <motion.div
+                  key={chat.participantId || chat.id}
+                  whileHover={{ backgroundColor: "#f9fafb" }}
+                  onClick={() => setSelectedChat(chat)}
+                  className={`p-4 border-b cursor-pointer ${
+                    selectedChat?.participantId === chat.participantId ? "bg-blue-50" : ""
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <img
+                      src={chat.avatar}
+                      alt={chat.name}
+                      className="w-12 h-12 rounded-full"
+                    />
+                    <div className="flex-1">
+                      <h3 className="font-semibold">{chat.name}</h3>
+                      <p className="text-sm text-gray-600 truncate">
+                        {chat.lastMessage}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              </motion.div>
-            ))}
+                </motion.div>
+              ))
+            ) : (
+              <div className="p-4 text-center text-gray-500">
+                No chats yet. Start a new conversation!
+              </div>
+            )}
           </div>
         </div>
 
@@ -310,44 +344,41 @@ const ChatSystem = () => {
 
               {/* Messages */}
               <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
-                {messages.map((msg) => (
-                  <motion.div
-                    key={msg.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className={`flex ${
-                      msg.sender === currentUser?.id
-                        ? "justify-end"
-                        : "justify-start"
-                    }`}
-                  >
-                    <div
-                      className={`px-3 py-2 rounded-lg max-w-xs shadow ${
-                        msg.sender === currentUser?.id
-                          ? "bg-blue-600 text-white"
-                          : "bg-white text-black"
+                {loading ? (
+                  <div className="flex justify-center items-center h-full">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  </div>
+                ) : messages.length > 0 ? (
+                  messages.map((msg, idx) => (
+                    <motion.div
+                      key={msg._id || idx}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className={`flex ${
+                        msg.senderId === currentUser?.id
+                          ? "justify-end"
+                          : "justify-start"
                       }`}
                     >
-                      {msg.type === "text" && <p>{msg.content}</p>}
-                      {msg.type === "image" && (
-                        <img
-                          src={msg.content}
-                          alt="shared"
-                          className="max-w-[200px] rounded"
-                        />
-                      )}
-                      {msg.type === "file" && (
-                        <div className="flex items-center space-x-2">
-                          <FaFile />
-                          <span>{msg.file?.name}</span>
-                        </div>
-                      )}
-                      <p className="text-xs text-right opacity-70 mt-1">
-                        {msg.timestamp}
-                      </p>
-                    </div>
-                  </motion.div>
-                ))}
+                      <div
+                        className={`px-3 py-2 rounded-lg max-w-xs shadow ${
+                          msg.senderId === currentUser?.id
+                            ? "bg-blue-600 text-white"
+                            : "bg-white text-black"
+                        }`}
+                      >
+                        <p>{msg.message}</p>
+                        <p className="text-xs text-right opacity-70 mt-1">
+                          {new Date(msg.createdAt || msg.timestamp).toLocaleTimeString()}
+                        </p>
+                      </div>
+                    </motion.div>
+                  ))
+                ) : (
+                  <div className="flex justify-center items-center h-full text-gray-500">
+                    No messages yet. Start the conversation!
+                  </div>
+                )}
                 <div ref={messagesEndRef} />
               </div>
 
@@ -405,6 +436,59 @@ const ChatSystem = () => {
           )}
         </div>
       </div>
+
+      {/* New Chat Modal */}
+      {showNewChat && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+        >
+          <motion.div
+            initial={{ scale: 0.9 }}
+            animate={{ scale: 1 }}
+            className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md max-h-96"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold">Start New Chat</h2>
+              <button
+                onClick={() => setShowNewChat(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+            <input
+              type="text"
+              placeholder="Search users..."
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full px-3 py-2 border rounded-lg mb-4"
+            />
+            <div className="overflow-y-auto max-h-64 space-y-2">
+              {users
+                .filter(
+                  (u) =>
+                    u.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    u.email?.toLowerCase().includes(searchTerm.toLowerCase())
+                )
+                .map((user) => (
+                  <div
+                    key={user.email}
+                    onClick={() =>
+                      startNewChat(user)
+                    }
+                    className="p-3 border rounded-lg hover:bg-blue-50 cursor-pointer"
+                  >
+                    <p className="font-semibold">{user.username}</p>
+                    <p className="text-sm text-gray-500">{user.email}</p>
+                    <p className="text-xs text-blue-600">{user.role}</p>
+                  </div>
+                ))}
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
     </div>
   );
 };

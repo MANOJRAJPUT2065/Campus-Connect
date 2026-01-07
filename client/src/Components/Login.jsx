@@ -25,6 +25,8 @@ import { useNavigate } from 'react-router-dom';
 import { authAPI } from '../services/api';
 
 const Login = () => {
+  const [role, setRole] = useState('student'); // student, teacher, coordinator
+  const [email, setEmail] = useState('');
   const [usn, setUsn] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -32,23 +34,53 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!usn || !password) {
-      toast.error('Please fill in all fields');
-      return;
+    
+    // Role-specific validation
+    if (role === 'student') {
+      if (!usn || !password) {
+        toast.error('Please fill in USN and Password');
+        return;
+      }
+    } else if (role === 'coordinator') {
+      // Coordinator can use either USN or Email
+      if ((!usn && !email) || !password) {
+        toast.error('Please fill in USN/Email and Password');
+        return;
+      }
+    } else {
+      // Teacher - Email only
+      if (!email || !password) {
+        toast.error('Please fill in Email and Password');
+        return;
+      }
     }
 
     try {
       setIsLoading(true);
-      const response = await authAPI.login({ usn, password });
       
-      // Store the token
+      // Build login data based on role
+      let loginData;
+      if (role === 'student') {
+        loginData = { usn, password, role };
+      } else if (role === 'coordinator') {
+        // Coordinator: use USN if available, otherwise email
+        loginData = usn ? { usn, password, role } : { email, password, role };
+      } else {
+        // Teacher
+        loginData = { email, password, role };
+      }
+      
+      const response = await authAPI.login(loginData);
+      
+      // Store the token and role
       localStorage.setItem('token', response.data.token);
+      localStorage.setItem('userRole', response.data.role);
       
       // Get user details
       const userResponse = await authAPI.getUserDetails();
       localStorage.setItem('user', JSON.stringify(userResponse.data));
       
-      toast.success('Login successful!');
+      toast.success(`${role.charAt(0).toUpperCase() + role.slice(1)} login successful!`);
       
       // Redirect to home page
       navigate('/');
@@ -63,37 +95,130 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-lg shadow-md">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-xl shadow-xl">
         <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Sign in to your account
-          </h2>
+          <h1 className="text-center text-4xl font-bold text-gray-900 mb-2">
+            Welcome Back
+          </h1>
+          <p className="text-center text-sm text-gray-600">Login to your account</p>
         </div>
+
+        {/* Role Selection Cards */}
+        <div className="grid grid-cols-3 gap-2 mb-6">
+          {[
+            { id: 'student', label: 'Student', icon: '👨‍🎓' },
+            { id: 'teacher', label: 'Teacher', icon: '👨‍🏫' },
+            { id: 'coordinator', label: 'Coordinator', icon: '👔' },
+          ].map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => {
+                setRole(r.id);
+                setEmail('');
+                setUsn('');
+              }}
+              className={`py-3 px-2 rounded-lg font-medium transition-all ${
+                role === r.id
+                  ? 'bg-indigo-600 text-white shadow-lg scale-105'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              <div className="text-2xl mb-1">{r.icon}</div>
+              <div className="text-xs sm:text-sm">{r.label}</div>
+            </button>
+          ))}
+        </div>
+
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="rounded-md shadow-sm space-y-4">
+          <div className="rounded-lg space-y-4 bg-gray-50 p-4">
+            {/* Student: USN login */}
+            {role === 'student' && (
+              <div>
+                <label htmlFor="usn" className="block text-sm font-medium text-gray-700 mb-1">
+                  USN / Roll Number
+                </label>
+                <input
+                  id="usn"
+                  name="usn"
+                  type="text"
+                  required
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  placeholder="Enter your USN (e.g., 1SI21CS001)"
+                  value={usn}
+                  onChange={(e) => setUsn(e.target.value)}
+                />
+              </div>
+            )}
+
+            {/* Coordinator: USN or Email login */}
+            {role === 'coordinator' && (
+              <>
+                <div>
+                  <label htmlFor="usn" className="block text-sm font-medium text-gray-700 mb-1">
+                    USN / Roll Number (Optional)
+                  </label>
+                  <input
+                    id="usn"
+                    name="usn"
+                    type="text"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    placeholder="Enter your USN if available"
+                    value={usn}
+                    onChange={(e) => setUsn(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                    Email Address {!usn && '*'}
+                  </label>
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    required={!usn}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    placeholder="Enter your email (if no USN)"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Use either USN or Email to login</p>
+                </div>
+              </>
+            )}
+
+            {/* Teacher: Email login */}
+            {role === 'teacher' && (
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                  Email Address
+                </label>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  required
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+            )}
+
             <div>
-              <label htmlFor="usn" className="sr-only">USN</label>
-              <input
-                id="usn"
-                name="usn"
-                type="text"
-                required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="USN (e.g., 1SI21CS001)"
-                value={usn}
-                onChange={(e) => setUsn(e.target.value)}
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="sr-only">Password</label>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                Password
+              </label>
               <input
                 id="password"
                 name="password"
                 type="password"
                 required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Password"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                placeholder="Enter your password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />

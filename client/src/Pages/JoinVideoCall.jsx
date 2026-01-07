@@ -54,7 +54,8 @@ const JoinVideoCall = () => {
   const fetchSessionInfo = async () => {
     try {
       setLoading(true);
-      const response = await fetch(buildApiUrl(`/api/videocall/session/${sessionId}`));
+      // Try to fetch session by ID (could be channel name or session ID)
+      const response = await fetch(buildApiUrl(`/api/sessions/${sessionId}`));
       const data = await response.json();
 
       if (data.success) {
@@ -75,33 +76,56 @@ const JoinVideoCall = () => {
 
     try {
       setIsJoining(true);
+      const role = localStorage.getItem('userRole') || 'student';
       
-      // Join the session via backend
-      const response = await fetch(buildApiUrl('/api/videocall/join-session'), {
+      // Join the session via backend using the original sessionId parameter
+      // (which can be channelName or ObjectId)
+      const response = await fetch(buildApiUrl(`/api/sessions/${sessionId}/join`), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          sessionId: sessionId,
           userId: userInfo.userId,
           userName: userInfo.userName,
-          userRole: 'student'
+          userRole: role
         })
       });
 
       const data = await response.json();
 
       if (data.success) {
-        // Store join data for VideoCall component
-        setJoinData(data);
-        // Update session info with channel name from response
-        if (data.channelName) {
-          setSessionInfo(prev => ({
-            ...prev,
-            channelName: data.channelName
-          }));
+        // Fetch a valid Agora token/appId for this channel
+        let agoraAppId = import.meta.env.VITE_AGORA_APP_ID;
+        let agoraToken = null;
+        try {
+          const tokenResp = await fetch(buildApiUrl('/api/videocall/generate-token'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              channelName: data.session.channelName,
+              uid: String(userInfo.userId || Math.floor(Math.random() * 100000)),
+              role: role === 'teacher' ? 'publisher' : 'subscriber'
+            })
+          });
+          const tokenData = await tokenResp.json();
+          if (tokenResp.ok && tokenData.success) {
+            agoraAppId = tokenData.appId;
+            agoraToken = tokenData.token;
+          }
+        } catch (tokenErr) {
+          console.error('Failed to fetch Agora token:', tokenErr);
         }
+
+        // Store join data for VideoCall component
+        setJoinData({
+          channelName: data.session.channelName,
+          appId: agoraAppId || data.session.agoraAppId || 'demo', 
+          token: agoraToken || 'fallback-token',
+          userRole: role
+        });
+        // Update session info
+        setSessionInfo(data.session);
         setHasJoined(true);
         toast.success('Joining video call...');
       } else {
@@ -121,6 +145,14 @@ const JoinVideoCall = () => {
         channelName={joinData.channelName || sessionInfo.channelName}
         sessionId={sessionId}
         roomTitle={sessionInfo.title}
+        userRole={joinData.userRole || 'student'}
+        userName={userInfo?.userName || 'Guest User'}
+        initialAgora={{
+          appId: joinData.appId,
+          token: joinData.token,
+          channelName: joinData.channelName || sessionInfo.channelName,
+          uid: joinData.participant?.userId || userInfo?.userId
+        }}
         onClose={() => {
           navigate('/online-classes');
         }}
@@ -225,7 +257,9 @@ const JoinVideoCall = () => {
         <div className="bg-gray-700 rounded-lg p-4 mb-6">
           <div className="flex justify-between text-sm">
             <span className="text-gray-400">Participants:</span>
-            <span className="text-white font-medium">{sessionInfo?.participants || 0} / {sessionInfo?.maxParticipants || 50}</span>
+            <span className="text-white font-medium">
+              {Array.isArray(sessionInfo?.participants) ? sessionInfo.participants.length : 0} / {sessionInfo?.maxParticipants || 50}
+            </span>
           </div>
           <div className="flex justify-between text-sm mt-2">
             <span className="text-gray-400">Status:</span>

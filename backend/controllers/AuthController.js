@@ -8,47 +8,125 @@ dotenv.config();
 const jwtKey = process.env.JWT_SECRET;
 
 export const signupRoute = async (req, res) => {
-    const { username, usn, email, password } = req.body;
+    const { username, usn, email, password, role = 'student', department, semester } = req.body;
   
+    // Validate role
+    const validRoles = ['student', 'teacher', 'coordinator'];
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({ message: 'Invalid role. Must be student, teacher, or coordinator.' });
+    }
+
+    // Role-specific validation
+    if (role === 'student' && !usn) {
+      return res.status(400).json({ message: 'USN is required for students.' });
+    }
+
+    if (role === 'teacher' && (usn || !email)) {
+      return res.status(400).json({ message: 'Teachers must use email, not USN.' });
+    }
+
+    // Coordinators can have either USN or email (or both)
+    if (role === 'coordinator' && !email && !usn) {
+      return res.status(400).json({ message: 'Coordinators must provide either USN or email.' });
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
   
     try {
-      console.log("Inside Signup Route");
+      console.log("Inside Signup Route for role:", role);
       const normalizedEmail = (email || '').trim().toLowerCase();
-      const normalizedUsn = (usn || '').trim().toLowerCase();
+      const normalizedUsn = (usn || '').trim().toLowerCase() || null;
 
       // Guard: prevent duplicate users
-      const existing = await User.findOne({ $or: [ { email: normalizedEmail }, { usn: normalizedUsn } ] });
-      if (existing) {
-        return res.status(409).json({ message: 'User already exists with same email or usn' });
+      if (role === 'student') {
+        const existing = await User.findOne({ $or: [ { email: normalizedEmail }, { usn: normalizedUsn } ] });
+        if (existing) {
+          return res.status(409).json({ message: 'User already exists with same email or usn' });
+        }
+      } else if (role === 'teacher') {
+        // Teacher - only check email
+        const existing = await User.findOne({ email: normalizedEmail });
+        if (existing) {
+          return res.status(409).json({ message: 'User already exists with this email' });
+        }
+      } else if (role === 'coordinator') {
+        // Coordinator - check both USN (if provided) and email (if provided)
+        const query = [];
+        if (normalizedEmail) query.push({ email: normalizedEmail });
+        if (normalizedUsn) query.push({ usn: normalizedUsn });
+        
+        if (query.length > 0) {
+          const existing = await User.findOne({ $or: query });
+          if (existing) {
+            return res.status(409).json({ message: 'User already exists with this email or USN' });
+          }
+        }
       }
 
       const user = new User({
         username: (username || '').trim(),
-        usn: normalizedUsn,
+        usn: role === 'student' || role === 'coordinator' ? normalizedUsn : null,
         email: normalizedEmail,
-        password: hashedPassword, 
+        password: hashedPassword,
+        role,
+        department: role === 'student' || role === 'coordinator' ? department : null,
+        semester: role === 'student' ? semester : null
       });
       await user.save();
-      res.status(201).json({ message: "User created successfully..." });
+      res.status(201).json({ message: `${role.charAt(0).toUpperCase() + role.slice(1)} account created successfully`, role });
     } catch (err) {
       console.error(err);
       if (err && err.code === 11000) {
-        return res.status(409).json({ message: 'User already exists (duplicate key)' });
+        const field = Object.keys(err.keyPattern)[0];
+        return res.status(409).json({ message: `User already exists with this ${field}` });
       }
       res.status(500).json({ message: "Failed to create user" });
     }
   };
 
 export const loginRoute = async (req, res) => {
-  console.log("Inside Login Route")
-  const { usn, password } = req.body;
+  console.log("Inside Login Route");
+  const { usn, email, password, role } = req.body;
 
   try {
-    const user = await User.findOne({ usn });
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
+    // Role-specific login logic
+    let user;
+    
+    if (role === 'student') {
+      // Students login with USN
+      if (!usn) {
+        return res.status(400).json({ message: 'USN is required for student login' });
+      }
+      user = await User.findOne({ usn, role: 'student' });
+      if (!user) {
+        return res.status(404).json({ message: 'Student not found' });
+      }
+    } else if (role === 'teacher') {
+      // Teachers login with email only
+      if (!email) {
+        return res.status(400).json({ message: 'Email is required for teacher login' });
+      }
+      user = await User.findOne({ email, role: 'teacher' });
+      if (!user) {
+        return res.status(404).json({ message: 'Teacher not found' });
+      }
+    } else if (role === 'coordinator') {
+      // Coordinators can login with USN or email
+      if (!usn && !email) {
+        return res.status(400).json({ message: 'USN or Email is required for coordinator login' });
+      }
+      
+      // Try to find by USN first if provided, then email
+      const query = [];
+      if (usn) query.push({ usn: usn.toLowerCase() });
+      if (email) query.push({ email: email.toLowerCase() });
+      
+      user = await User.findOne({ $or: query, role: 'coordinator' });
+      if (!user) {
+        return res.status(404).json({ message: 'Coordinator not found' });
+      }
+    } else {
+      return res.status(400).json({ message: 'Invalid role' });
     }
 
     const passwordMatch = await bcrypt.compare(password, user.password);
@@ -57,11 +135,30 @@ export const loginRoute = async (req, res) => {
       return res.status(401).json({ message: "Incorrect password" });
     }
 
-    const tokenPayload = { usn: user.usn, email: user.email, username: user.username, profilePicUrl: user.profilePicUrl };
+    // Build token payload based on role
+    const tokenPayload = {
+      userId: user._id,
+      email: user.email,
+      username: user.username,
+      role: user.role,
+      profilePicUrl: user.profilePicUrl,
+    };
+
+    // Add role-specific fields
+    if (user.role === 'student') {
+      tokenPayload.usn = user.usn;
+      tokenPayload.department = user.department;
+      tokenPayload.semester = user.semester;
+    }
 
     const token = jwt.sign(tokenPayload, jwtKey, { expiresIn: "1d" });
 
-    res.status(200).json({ message: "Login successful", token });
+    res.status(200).json({ 
+      message: "Login successful", 
+      token, 
+      role: user.role,
+      userId: user._id 
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to login" });

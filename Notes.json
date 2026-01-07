@@ -750,6 +750,155 @@
                 ]
             }
         ]
+    },
+    {
+        "branch": "First & Second Sem (All Branches, 2022 Scheme)",
+        "subjects": [
+            {
+                "id": 1,
+                "name": "Engineering Science Course-I",
+                "videos": [],
+                "materials": [
+                    { "title": "Introduction to Civil Engineering", "url": "https://thebackbencher.co.in/introduction-to-civil-engineering-vtu-notes/" },
+                    { "title": "Introduction to Electrical Engineering", "url": "https://thebackbencher.co.in/introduction-to-electrical-engineering-vtu-notes/" },
+                    { "title": "Introduction to Electronics Engineering", "url": "https://thebackbencher.co.in/introduction-to-electronics-engineering-vtu-notes/" },
+                    { "title": "Introduction to Mechanical Engineering", "url": "https://thebackbencher.co.in/introduction-to-mechanical-engineering-vtu-notes/" }
+                ]
+            },
+            {
+                "id": 2,
+                "name": "Programming Language Courses-I",
+                "videos": [],
+                "materials": [
+                    { "title": "Python Programming (2022 Scheme)", "url": "https://thebackbencher.co.in/vtu-python-programming-notes-2022-scheme/" },
+                    { "title": "Object Oriented Programming with Java (2022 Scheme)", "url": "https://thebackbencher.co.in/object-oriented-programming-with-java-vtu-notes-2022-scheme/" },
+                    { "title": "C++ Programming (2022 Scheme)", "url": "https://thebackbencher.co.in/vtu-cpp-programming-notes-2022-scheme/" }
+                ]
+            },
+            {
+                "id": 3,
+                "name": "Emerging Technology Course",
+                "videos": [],
+                "materials": [
+                    { "title": "Internet of Things (IoT)", "url": "https://thebackbencher.co.in/vtu-iot-notes-2022-scheme/" },
+                    { "title": "Cyber Security", "url": "https://thebackbencher.co.in/vtu-cyber-security-notes-2022-scheme/" },
+                    { "title": "Green Buildings", "url": "https://thebackbencher.co.in/vtu-green-buildings-notes-2022-scheme/" }
+                ]
+            },
+            {
+                "id": 4,
+                "name": "Common For All Branches",
+                "videos": [],
+                "materials": [
+                    { "title": "Engineering Graphics & CAD (CAED)", "url": "https://thebackbencher.co.in/vtu-engineering-graphics-cad-notes-2022-scheme/" }
+                ]
+            }
+        ]
+    },
+    {
+        "branch": "CSE 1st & 2nd Sem (2022 Scheme)",
+        "subjects": [
+            {
+                "id": 1,
+                "name": "Mathematics - I (BMATS101)",
+                "videos": [],
+                "materials": [
+                    { "title": "2022 - CSE M1 Notes", "url": "https://thebackbencher.co.in/vtu-2022-cse-m1-notes/" }
+                ]
+            },
+            {
+                "id": 2,
+                "name": "Mathematics - II (BMATS201)",
+                "videos": [],
+                "materials": [
+                    { "title": "2022 - CSE M2 Notes", "url": "https://thebackbencher.co.in/vtu-2022-cse-m2-notes/" }
+                ]
+            },
+            {
+                "id": 3,
+                "name": "Physics (CSE 2022)",
+                "videos": [],
+                "materials": [
+                    { "title": "2022 - CSE Physics Notes", "url": "https://thebackbencher.co.in/vtu-2022-cse-physics-notes/" }
+                ]
+            },
+            {
+                "id": 4,
+                "name": "Principles of Programming Using C (BPOPSC105E/205E)",
+                "videos": [],
+                "materials": [
+                    { "title": "BPOPS - Principles of Programming using C", "url": "https://thebackbencher.co.in/bpops-vtu-principles-of-programming-using-c-notes/" }
+                ]
+            }
+        ]
+    },
+    {
+        "branch": "Electronics & Communication (2022 Scheme)",
+        "subjects": [
+            {
+                "id": 1,
+                "name": "Index and Semesters",
+                "videos": [],
+                "materials": [
+                    { "title": "1st & 2nd Semester (2022 Scheme) - VTU Notes", "url": "https://thebackbencher.co.in/2022-scheme-1st-2nd-sem-vtu-notes/" },
+                    { "title": "EC 3rd Semester (2022 Scheme) - VTU Notes", "url": "https://thebackbencher.co.in/ec-3rd-semester-2022-scheme-vtu-notes/" },
+                    { "title": "ECE 2022 Scheme - Overview", "url": "https://thebackbencher.co.in/electronics-and-communication-engineering-2022-scheme-vtu-notes/" }
+                ]
+            }
+        ]
+    },
+    {
+        "branch": "Civil 5th Sem (VTU)",
+        "subjects": [
+            {
+                "id": 1,
+                "name": "Construction Management & Entrepreneurship",
+                "videos": [],
+                "materials": [
+                    { "title": "Construction Management & Entrepreneurship - Notes", "url": "https://thebackbencher.co.in/construction-management-and-entrepreneurship-notes/" }
+                ]
+            },
+            {
+                "id": 2,
+                "name": "Analysis Of Indeterminate Structures",
+                "videos": [],
+                "materials": [
+                    { "title": "Analysis Of Indeterminate Structures - Notes", "url": "https://thebackbencher.co.in/analysis-of-indeterminate-structures-notes/" }
+                ]
+            },
+            {
+                "id": 3,
+                "name": "Design Of RC Structural Elements",
+                "videos": [],
+                "materials": [
+                    { "title": "Design Of RC Structural Elements - Notes", "url": "https://thebackbencher.co.in/design-of-rc-structural-elements-civil-5th-sem-notes/" }
+                ]
+            },
+            {
+                "id": 4,
+                "name": "Basic Geotechnical Engineering",
+                "videos": [],
+                "materials": [
+                    { "title": "Basic Geotechnical Engineering - Notes", "url": "https://thebackbencher.co.in/basic-geotechnical-engineering-civil-5th-sem-notes/" }
+                ]
+            },
+            {
+                "id": 5,
+                "name": "Municipal Wastewater Engineering",
+                "videos": [],
+                "materials": [
+                    { "title": "Municipal Wastewater Engineering - Notes", "url": "https://thebackbencher.co.in/municipal-wastewater-engineering-civil-5th-sem-notes/" }
+                ]
+            },
+            {
+                "id": 6,
+                "name": "Highway Engineering",
+                "videos": [],
+                "materials": [
+                    { "title": "Highway Engineering - Notes", "url": "https://thebackbencher.co.in/highway-engineering-5th-sem-notes/" }
+                ]
+            }
+        ]
     }
 ]
 

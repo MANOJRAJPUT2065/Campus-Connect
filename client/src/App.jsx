@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
@@ -26,9 +26,18 @@ import CodeEditor from './Components/CodeEditor';
 import ChatSystem from './Components/ChatSystem';
 import JoinVideoCall from './Pages/JoinVideoCall';
 import StudyMaterials from './Components/StudyMaterials';
+import HomePage from './Pages/HomePage';
+import TeacherDashboard from './Pages/TeacherDashboard';
+import CoordinatorDashboard from './Pages/CoordinatorDashboard';
+import EventDetails from './Pages/EventDetails';
 
 function App() {
   const [showChatbot, setShowChatbot] = useState(false);
+
+  const studentRoles = ['student', 'admin'];
+  const teacherRoles = ['teacher', 'admin'];
+  const coordinatorRoles = ['coordinator', 'admin'];
+  const classJoinRoles = ['student', 'teacher', 'admin'];
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-black">
@@ -43,27 +52,49 @@ function App() {
         <div className="content relative px-4 py-6">
           <ToastContainer />
           <Routes>
-            <Route path="/" element={<Feed />} />
+            {/* Public Routes */}
+            <Route path="/" element={<HomePage />} />
             <Route path="/signup" element={<SignupForm />} />
             <Route path="/login" element={<LoginForm />} />
-            <Route path="/events" element={<Events />} />
-            <Route path="/notices" element={<Notices />} />
-            <Route path="/academics" element={<Academics />} />
-            <Route path="/online-classes" element={<OnlineClasses />} />
-            <Route path="/account/:id" element={<Account />} />
+            <Route path="/feed" element={<RoleRoute allowedRoles={studentRoles}><Feed /></RoleRoute>} />
+            <Route path="/events" element={<RoleRoute allowedRoles={studentRoles}><Events /></RoleRoute>} />
+            <Route path="/notices" element={<RoleRoute allowedRoles={studentRoles}><Notices /></RoleRoute>} />
+            <Route path="/academics" element={<RoleRoute allowedRoles={studentRoles}><Academics /></RoleRoute>} />
+            <Route path="/online-classes" element={<RoleRoute allowedRoles={studentRoles}><OnlineClasses /></RoleRoute>} />
+            <Route path="/account/:id" element={<ProtectedRoute><Account /></ProtectedRoute>} />
             <Route path="/profile" element={<RedirectToMyAccount />} />
             <Route path="/account" element={<RedirectToMyAccount />} />
-            <Route path="/addpost" element={<AddPostForm />} />
-            <Route path="/addEvent" element={<EventForm />} />
-            <Route path="/message/:recieverId" element={<MessageSection />} />
-            <Route path="/chat" element={<ChatSystem />} />
-            <Route path="/ai-chatbot" element={<AIChatbot onClose={() => window.history.back()} />} />
-            <Route path="/notifications" element={<PushNotifications />} />
-            <Route path="/quiz" element={<QuizPlatform onClose={() => window.history.back()} />} />
-            <Route path="/code-editor" element={<CodeEditor onClose={() => window.history.back()} />} />
-            <Route path="/video-call" element={<VideoCall onClose={() => window.history.back()} />} />
-            <Route path="/video-call/join/:sessionId" element={<JoinVideoCall />} />
-            <Route path="/study-materials" element={<StudyMaterials />} />
+            <Route path="/addpost" element={<RoleRoute allowedRoles={studentRoles}><AddPostForm /></RoleRoute>} />
+            <Route path="/addEvent" element={<RoleRoute allowedRoles={coordinatorRoles}><EventForm /></RoleRoute>} />
+            <Route path="/message/:recieverId" element={<RoleRoute allowedRoles={studentRoles}><MessageSection /></RoleRoute>} />
+            <Route path="/chat" element={<RoleRoute allowedRoles={studentRoles}><ChatSystem /></RoleRoute>} />
+            <Route path="/ai-chatbot" element={<RoleRoute allowedRoles={studentRoles}><AIChatbot onClose={() => window.history.back()} /></RoleRoute>} />
+            <Route path="/notifications" element={<RoleRoute allowedRoles={studentRoles}><PushNotifications /></RoleRoute>} />
+            <Route path="/quiz" element={<RoleRoute allowedRoles={studentRoles}><QuizPlatform onClose={() => window.history.back()} /></RoleRoute>} />
+            <Route path="/code-editor" element={<RoleRoute allowedRoles={studentRoles}><CodeEditor onClose={() => window.history.back()} /></RoleRoute>} />
+            <Route path="/video-call" element={<RoleRoute allowedRoles={studentRoles}><VideoCall onClose={() => window.history.back()} /></RoleRoute>} />
+            <Route path="/join/:sessionId" element={<RoleRoute allowedRoles={classJoinRoles}><JoinVideoCall /></RoleRoute>} />
+            <Route path="/video-call/join/:sessionId" element={<RoleRoute allowedRoles={classJoinRoles}><JoinVideoCall /></RoleRoute>} />
+            <Route path="/study-materials" element={<RoleRoute allowedRoles={studentRoles}><StudyMaterials /></RoleRoute>} />
+            <Route path="/event/:id" element={<RoleRoute allowedRoles={["student","teacher","coordinator","admin"]}><EventDetails /></RoleRoute>} />
+            
+            {/* Role-Based Routes */}
+            <Route
+              path="/teacher-dashboard"
+              element={
+                <RoleRoute allowedRoles={['teacher', 'admin']}>
+                  <TeacherDashboard />
+                </RoleRoute>
+              }
+            />
+            <Route
+              path="/coordinator-dashboard"
+              element={
+                <RoleRoute allowedRoles={['coordinator', 'admin']}>
+                  <CoordinatorDashboard />
+                </RoleRoute>
+              }
+            />
           </Routes>
         </div>
       </Router>
@@ -102,6 +133,31 @@ function RedirectToMyAccount() {
   } catch (e) {
     return <LoginForm />;
   }
+}
+
+// Auth guard for logged-in users
+function ProtectedRoute({ children }) {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
+}
+
+// Simple role-based guard for protected pages
+function RoleRoute({ allowedRoles, children }) {
+  const token = localStorage.getItem('token');
+  const role = localStorage.getItem('userRole');
+
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!role || !allowedRoles.includes(role)) {
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
 }
 
 export default App;

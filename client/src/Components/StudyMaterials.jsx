@@ -1,219 +1,208 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { FaSearch, FaDownload, FaBook, FaFilePdf, FaFileWord, FaFilePowerpoint, FaFileExcel, FaFileAlt } from 'react-icons/fa';
+import { FaBook, FaFilePdf, FaFileAlt, FaSpinner, FaExternalLinkAlt, FaPlayCircle, FaFolder } from 'react-icons/fa';
 import axios from 'axios';
-import BASE_API from '../api';
+import { buildApiUrl } from '../config/api';
 
 const StudyMaterials = () => {
-  const [materials, setMaterials] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [studyData, setStudyData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedBranch, setSelectedBranch] = useState('CSE');
-
-  const branches = ['CSE', 'IT', 'ECE', 'EEE', 'MECH', 'CIVIL'];
+  const [error, setError] = useState(null);
+  const [selectedBranch, setSelectedBranch] = useState('Computer Related');
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    fetchStudyMaterials();
-  }, [selectedBranch]);
+    fetchStudyData();
+  }, []);
 
-  // const fetchStudyMaterials = async () => {
-  //   try {
-  //     setLoading(true);
-  //     const response = await axios.get(`${BASE_API}/notes/getBranchNotes/${selectedBranch}`);
-  //     if (response.data && response.data.subjects) {
-  //       const transformedMaterials = response.data.subjects.flatMap(subject => 
-  //         subject.notes.map(note => ({
-  //           id: note._id,
-  //           title: note.title,
-  //           type: note.type || 'PDF',
-  //           subject: subject.subjectName,
-  //           branch: selectedBranch,
-  //           url: note.url,
-  //           uploadedAt: note.uploadedAt || new Date().toISOString()
-  //         }))
-  //       );
-  //       setMaterials(transformedMaterials);
-  //     }
-  //   } catch (error) {
-  //     console.error('Error fetching study materials:', error);
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
-
-
-
-  const fetchStudyMaterials = async () => {
-  setLoading(true);
-
-  // VTU DATA
-  const VTU_DATA = {
-    CSE: [
-      {
-        subject: "Data Structures",
-        notes: [
-          { title: "DS Notes PDF", url: "https://vtu.ac.in/wp-content/uploads/2022/DS.pdf", type: "pdf" },
-          { title: "DS Lab Manual", url: "https://vtu.ac.in/wp-content/uploads/2022/DS-lab.pdf", type: "pdf" }
-        ],
-        videos: [
-          { title: "DS Full Playlist - NPTEL", url: "https://www.youtube.com/playlist?list=PLLOxZwkBK52CK0aUg3SJlWSqU9xGg4j7j" },
-          { title: "DS VTU Lecture Series", url: "https://www.youtube.com/playlist?list=PLwkEJj2RYeJZkDzB8pvN4dQzz8DVdhf6O" }
-        ]
-      },
-      {
-        subject: "Computer Networks",
-        notes: [
-          { title: "CN Notes", url: "https://vtu.ac.in/wp-content/uploads/2022/CN.pdf", type: "pdf" }
-        ],
-        videos: [
-          { title: "CN VTU Playlist", url: "https://www.youtube.com/playlist?list=PLxCzCOWd7aiGFBD2-2joCpWOLUrDLvVV_" }
-        ]
+  const fetchStudyData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Fetch from Notes.json via backend
+      const response = await axios.get(buildApiUrl('/api/notes'));
+      
+      if (Array.isArray(response.data)) {
+        setStudyData(response.data);
+      } else {
+        setError('Invalid data format');
       }
-    ],
-
-    IT: [
-      {
-        subject: "DBMS",
-        notes: [
-          { title: "DBMS Notes", url: "https://vtu.ac.in/wp-content/uploads/2022/DBMS.pdf", type: "pdf" }
-        ],
-        videos: [
-          { title: "DBMS Playlist", url: "https://www.youtube.com/playlist?list=PLEbnTDJUr_IcPtUXFy2b1sGRPsLFMghhS" }
-        ]
-      }
-    ],
-
-    ECE: [
-      {
-        subject: "Digital Electronics",
-        notes: [
-          { title: "DE Notes", url: "https://vtu.ac.in/wp-content/uploads/2022/DE.pdf", type: "pdf" }
-        ],
-        videos: [
-          { title: "DE Playlist", url: "https://www.youtube.com/playlist?list=PLLOxZwkBK52B9CY7Yg2PXR4KpoC6WVW57" }
-        ]
-      }
-    ]
-  };
-
-  const transformed = VTU_DATA[selectedBranch]?.flatMap(sub =>
-    sub.notes.map(note => ({
-      id: Math.random(),
-      title: note.title,
-      type: note.type,
-      subject: sub.subject,
-      branch: selectedBranch,
-      url: note.url,
-      uploadedAt: new Date().toISOString()
-    }))
-  ) || [];
-
-  setMaterials(transformed);
-  setLoading(false);
-};
-
-
-  const filteredMaterials = materials.filter(material => 
-    material.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    material.subject.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const getFileIcon = (type) => {
-    const fileType = (type || '').toLowerCase();
-    switch (fileType) {
-      case 'pdf':
-        return <FaFilePdf className="text-red-500 text-2xl" />;
-      case 'doc':
-      case 'docx':
-        return <FaFileWord className="text-blue-500 text-2xl" />;
-      case 'ppt':
-      case 'pptx':
-        return <FaFilePowerpoint className="text-orange-500 text-2xl" />;
-      case 'xls':
-      case 'xlsx':
-        return <FaFileExcel className="text-green-500 text-2xl" />;
-      default:
-        return <FaFileAlt className="text-gray-500 text-2xl" />;
+    } catch (error) {
+      console.error('Error fetching study materials:', error);
+      setError('Failed to load study materials. Please try again later.');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleDownload = (url, filename) => {
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename || 'download';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  // Get current branch data
+  const currentBranchData = studyData.find(b => b.branch === selectedBranch);
+  const branches = studyData.map(b => b.branch);
+
+  // Filter subjects based on search
+  const filteredSubjects = currentBranchData?.subjects?.filter(subject =>
+    subject.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (subject.category && subject.category.toLowerCase().includes(searchTerm.toLowerCase()))
+  ) || [];
+
+  const getFileIcon = (url = '') => {
+    const urlLower = (url || '').toLowerCase();
+    if (urlLower.includes('.pdf')) {
+      return <FaFilePdf className="text-red-500 text-lg" />;
+    }
+    return <FaFileAlt className="text-gray-500 text-lg" />;
   };
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h1 className="text-2xl font-bold mb-6 flex items-center">
-          <FaBook className="mr-2" /> Study Materials
-        </h1>
-        
-        {/* Search and Filter */}
-        <div className="mb-6 flex flex-col md:flex-row gap-4">
-          <div className="relative flex-1">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black py-8">
+      <div className="max-w-6xl mx-auto px-4">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg shadow-lg p-6 mb-6">
+            <h1 className="text-4xl font-bold text-white flex items-center mb-2">
+              <FaBook className="mr-3" /> Study Materials Hub
+            </h1>
+            <p className="text-blue-100">Access comprehensive learning resources by branch and subject</p>
+          </div>
+
+          {/* Search Bar */}
+          <div className="mb-6">
             <input
               type="text"
-              placeholder="Search materials..."
-              className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Search subjects..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full px-4 py-3 bg-gray-800 text-white rounded-lg border border-gray-700 focus:border-blue-500 focus:outline-none"
             />
-            <FaSearch className="absolute left-3 top-3 text-gray-400" />
           </div>
-          
-          <select
-            className="p-2 border rounded-lg"
-            value={selectedBranch}
-            onChange={(e) => setSelectedBranch(e.target.value)}
-          >
+
+          {/* Branch Selector */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
             {branches.map(branch => (
-              <option key={branch} value={branch}>{branch}</option>
+              <motion.button
+                key={branch}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => {
+                  setSelectedBranch(branch);
+                  setSearchTerm('');
+                }}
+                className={`p-4 rounded-lg font-medium transition-all ${
+                  selectedBranch === branch
+                    ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
+                    : 'bg-gray-800 text-gray-300 hover:bg-gray-700 shadow'
+                }`}
+              >
+                {branch}
+              </motion.button>
             ))}
-          </select>
+          </div>
         </div>
 
-        {/* Materials List */}
+        {/* Materials Display */}
         {loading ? (
-          <div className="flex justify-center items-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+          <div className="flex flex-col items-center justify-center py-16">
+            <FaSpinner className="text-5xl text-blue-500 animate-spin mb-4" />
+            <p className="text-gray-300 font-medium">Loading materials...</p>
           </div>
-        ) : filteredMaterials.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
-            <FaFileAlt className="mx-auto text-4xl mb-2" />
-            <p>No study materials found</p>
-            <p className="text-sm">Select a different branch or check back later</p>
+        ) : error ? (
+          <div className="bg-red-900 border border-red-700 rounded-lg p-6 text-center">
+            <p className="text-red-200 font-medium">{error}</p>
+            <button
+              onClick={fetchStudyData}
+              className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+            >
+              Retry
+            </button>
+          </div>
+        ) : !currentBranchData ? (
+          <div className="bg-gray-800 rounded-lg shadow text-center py-12">
+            <FaFolder className="text-6xl text-gray-600 mx-auto mb-4" />
+            <p className="text-gray-300 text-lg font-medium">Select a branch to view materials</p>
+          </div>
+        ) : filteredSubjects.length === 0 ? (
+          <div className="bg-gray-800 rounded-lg shadow text-center py-12">
+            <FaFileAlt className="text-6xl text-gray-600 mx-auto mb-4" />
+            <p className="text-gray-300 text-lg font-medium">No subjects found</p>
+            <p className="text-gray-500 text-sm mt-2">Try adjusting your search</p>
           </div>
         ) : (
-          <div className="space-y-4">
-            {filteredMaterials.map((material) => (
+          <div className="space-y-6">
+            {filteredSubjects.map((subject, idx) => (
               <motion.div
-                key={material.id}
+                key={subject.id}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+                transition={{ delay: idx * 0.05 }}
+                className="bg-gray-800 rounded-lg shadow-lg overflow-hidden border border-gray-700"
               >
-                <div className="flex items-center space-x-4">
-                  {getFileIcon(material.type)}
-                  <div>
-                    <h3 className="font-medium">{material.title}</h3>
-                    <p className="text-sm text-gray-500">
-                      {material.subject} • {new Date(material.uploadedAt).toLocaleDateString()}
-                    </p>
-                  </div>
+                {/* Subject Header */}
+                <div className="bg-gradient-to-r from-gray-700 to-gray-800 p-6 border-b border-gray-700">
+                  <h2 className="text-2xl font-bold text-white mb-2">{subject.name}</h2>
+                  {subject.category && (
+                    <p className="text-gray-400 text-sm">📌 {subject.category}</p>
+                  )}
                 </div>
-                <button
-                  onClick={() => handleDownload(material.url, material.title)}
-                  className="flex items-center space-x-1 text-blue-500 hover:text-blue-700 p-2 rounded-full hover:bg-blue-50"
-                  title="Download"
-                >
-                  <FaDownload />
-                  <span className="hidden md:inline">Download</span>
-                </button>
+
+                {/* Content */}
+                <div className="p-6 space-y-6">
+                  {/* Videos Section */}
+                  {subject.videos && subject.videos.length > 0 && (
+                    <div>
+                      <h3 className="text-lg font-semibold text-blue-400 mb-4 flex items-center">
+                        <FaPlayCircle className="mr-2" /> Video Resources
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {subject.videos.map((video, vIdx) => (
+                          <div
+                            key={vIdx}
+                            className="bg-gray-700 hover:bg-gray-650 rounded-lg p-4 transition-colors border border-gray-600"
+                          >
+                            <p className="text-gray-200 font-medium flex items-center">
+                              <FaPlayCircle className="mr-2 text-red-500" />
+                              {video.title}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Materials Section */}
+                  {subject.materials && subject.materials.length > 0 && (
+                    <div>
+                      <h3 className="text-lg font-semibold text-green-400 mb-4 flex items-center">
+                        <FaExternalLinkAlt className="mr-2" /> Learning Materials
+                      </h3>
+                      <div className="space-y-3">
+                        {subject.materials.map((material, mIdx) => (
+                          <motion.a
+                            key={mIdx}
+                            href={material.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            whileHover={{ x: 4 }}
+                            className="group flex items-center gap-4 bg-gray-700 hover:bg-gray-650 rounded-lg p-4 transition-colors border border-gray-600 cursor-pointer"
+                          >
+                            <div className="flex-shrink-0">
+                              {getFileIcon(material.url)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-gray-100 font-medium group-hover:text-blue-400 transition-colors truncate">
+                                {material.title}
+                              </p>
+                              <p className="text-gray-500 text-xs mt-1 truncate">
+                                {material.url}
+                              </p>
+                            </div>
+                            <FaExternalLinkAlt className="text-gray-400 group-hover:text-blue-400 transition-colors flex-shrink-0" />
+                          </motion.a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </motion.div>
             ))}
           </div>

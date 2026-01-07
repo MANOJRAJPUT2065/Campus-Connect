@@ -103,6 +103,7 @@ router.post('/create-session', (req, res) => {
         allowRecording: true,
         allowChat: true,
         allowWhiteboard: true,
+          isLocked: false,
         ...settings
       },
       status: 'waiting',
@@ -146,6 +147,13 @@ router.post('/join-session', (req, res) => {
       return res.status(404).json({
         success: false,
         error: 'Session not found'
+      });
+    }
+
+    if (session.settings?.isLocked && userRole !== 'instructor') {
+      return res.status(403).json({
+        success: false,
+        error: 'Session is locked by host'
       });
     }
 
@@ -204,6 +212,7 @@ router.post('/join-session', (req, res) => {
       token: token || 'mock-token-for-testing',
       appId: AGORA_APP_ID || 'mock-app-id',
       channelName: session.channelName,
+      userRole,
       message: 'Successfully joined session'
     });
 

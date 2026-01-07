@@ -44,3 +44,62 @@ export const optionalAuth = (req, res, next) => {
   
   next();
 };
+
+/**
+ * Role-based access control middleware
+ * @param {Array<string>} allowedRoles - Array of roles allowed to access the route
+ * @returns {Function} Express middleware function
+ * 
+ * Usage:
+ * router.get('/path', authenticateToken, requireRole(['teacher', 'admin']), controller)
+ */
+export const requireRole = (allowedRoles) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ 
+        success: false,
+        message: 'Authentication required' 
+      });
+    }
+
+    const userRole = req.user.role;
+    
+    if (!userRole) {
+      return res.status(403).json({ 
+        success: false,
+        message: 'User role not defined' 
+      });
+    }
+
+    if (!allowedRoles.includes(userRole)) {
+      return res.status(403).json({ 
+        success: false,
+        message: `Access denied. Required role: ${allowedRoles.join(' or ')}`,
+        userRole: userRole
+      });
+    }
+
+    next();
+  };
+};
+
+/**
+ * Check if user has admin privileges
+ */
+export const requireAdmin = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ 
+      success: false,
+      message: 'Authentication required' 
+    });
+  }
+
+  if (req.user.role !== 'admin' && req.user.admin !== true) {
+    return res.status(403).json({ 
+      success: false,
+      message: 'Admin access required' 
+    });
+  }
+
+  next();
+};

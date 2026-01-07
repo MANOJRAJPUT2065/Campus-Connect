@@ -185,7 +185,8 @@ const Notices = () => {
             <div>
               <h1 className="text-3xl font-bold text-gray-900 mb-2">Campus Notices</h1>
               <p className="text-gray-600">Stay updated with the latest announcements and important information</p>
-              <p className="text-sm text-green-600 font-medium">✨ New random notices every day! Click refresh to get more.</p>
+              <p className="text-xs text-gray-500">📖 Student-only view (read-only). Teacher & Coordinator announcements via dashboards.</p>
+              <p className="text-sm text-green-600 font-medium mt-1">✨ New random notices every day! Click refresh to get more.</p>
             </div>
             <button
               onClick={fetchNotices}

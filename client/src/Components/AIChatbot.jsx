@@ -87,7 +87,7 @@ const AIChatbot = ({ onClose }) => {
     setIsLoading(true);
 
     try {
-      console.log('[AIChat] Sending message to backend', { endpoint: buildApiUrl('/api/chatbot/ask'), message: inputMessage });
+      console.log('[AIChat] Sending message to Gemini API', { endpoint: buildApiUrl('/api/chatbot/ask'), message: inputMessage });
       const response = await fetch(buildApiUrl('/api/chatbot/ask'), {
         method: 'POST',
         headers: {
@@ -100,71 +100,37 @@ const AIChatbot = ({ onClose }) => {
       });
 
       const data = await response.json();
-      console.log('[AIChat] Response from backend', data);
+      console.log('[AIChat] Response from Gemini API', data);
       
       if (data.success && data.answer) {
         const botMessage = {
           id: Date.now() + 1,
           type: 'bot',
           content: data.answer,
-          timestamp: new Date().toLocaleTimeString()
+          timestamp: new Date().toLocaleTimeString(),
+          source: data.source
         };
 
         setMessages(prev => [...prev, botMessage]);
       } else {
-        // Fallback response
-        const fallbackResponse = getFallbackResponse(inputMessage);
-        const botMessage = {
-          id: Date.now() + 1,
-          type: 'bot',
-          content: fallbackResponse,
-          timestamp: new Date().toLocaleTimeString()
-        };
-
-        setMessages(prev => [...prev, botMessage]);
+        throw new Error(data.error || 'Failed to get response from AI');
       }
     } catch (error) {
-      console.error('[AIChat] Error sending message:', error);
+      console.error('[AIChat] Error with Gemini API:', error);
+      toast.error('Failed to get response from AI. Please try again.');
       
-      // Fallback responses for common questions
-      const fallbackResponse = getFallbackResponse(inputMessage);
-      const botMessage = {
+      // Remove loading state by showing error message
+      const errorMessage = {
         id: Date.now() + 1,
         type: 'bot',
-        content: fallbackResponse,
+        content: "I encountered an error while processing your question. Please try again or contact support.",
         timestamp: new Date().toLocaleTimeString()
       };
 
-      setMessages(prev => [...prev, botMessage]);
+      setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const getFallbackResponse = (message) => {
-    const lowerMessage = message.toLowerCase();
-    
-    if (lowerMessage.includes('exam') || lowerMessage.includes('test')) {
-      return "Based on the current schedule, the next exam is scheduled for next week. Please check your course calendar for the exact date and time. Don't forget to review the study materials!";
-    }
-    
-    if (lowerMessage.includes('syllabus') || lowerMessage.includes('curriculum')) {
-      return "The syllabus for this semester covers the main topics from your course outline. You can find the detailed syllabus in your course materials section. Would you like me to help you find specific topics?";
-    }
-    
-    if (lowerMessage.includes('deadline') || lowerMessage.includes('due date')) {
-      return "Assignment deadlines are typically posted in your course announcements. The next major assignment is due in 2 weeks. I recommend checking your course dashboard for the most up-to-date information.";
-    }
-    
-    if (lowerMessage.includes('submit') || lowerMessage.includes('assignment')) {
-      return "You can submit assignments through the course submission portal. Make sure to follow the submission guidelines and check the file format requirements before uploading.";
-    }
-    
-    if (lowerMessage.includes('grade') || lowerMessage.includes('grading')) {
-      return "The grading policy is outlined in your course syllabus. Typically, assignments count for 40%, exams for 40%, and participation for 20%. Check with your instructor for specific details.";
-    }
-    
-    return "I understand your question about '" + message + "'. While I'm processing this, you might want to check your course materials or contact your instructor for the most accurate information. Is there anything specific I can help you with?";
   };
 
   const handleSuggestionClick = (suggestion) => {

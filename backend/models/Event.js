@@ -90,6 +90,89 @@ const eventSchema = new mongoose.Schema({
         default: false 
     },
     
+    // Coordinator and Ownership (ENHANCED)
+    coordinatorId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        index: true
+    },
+    
+    coordinatorEmail: {
+        type: String,
+        trim: true,
+        lowercase: true,
+        index: true
+    },
+    
+    clubId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Club'
+    },
+    
+    // Participant Management (NEW)
+    registrations: [{
+        userId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+            required: true
+        },
+        name: String,
+        email: String,
+        phone: String,
+        usn: String,
+        registeredAt: {
+            type: Date,
+            default: Date.now
+        },
+        approvalStatus: {
+            type: String,
+            enum: ['pending', 'approved', 'rejected', 'waitlisted'],
+            default: 'pending'
+        },
+        approvedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User'
+        },
+        approvedAt: Date,
+        rejectionReason: String,
+        attended: {
+            type: Boolean,
+            default: false
+        },
+        attendedAt: Date
+    }],
+    
+    // Registration Settings (NEW)
+    registrationDeadline: {
+        type: Date
+    },
+    
+    requiresApproval: {
+        type: Boolean,
+        default: false
+    },
+    
+    autoApprove: {
+        type: Boolean,
+        default: true
+    },
+    
+    // Capacity Management (ENHANCED)
+    currentParticipants: {
+        type: Number,
+        default: 0
+    },
+    
+    approvedParticipants: {
+        type: Number,
+        default: 0
+    },
+    
+    waitlistCount: {
+        type: Number,
+        default: 0
+    },
+    
     // Simple Schedule
     startTime: { 
         type: Date, 
@@ -229,6 +312,66 @@ eventSchema.statics.searchEvents = function(query, filters = {}) {
     if (filters.eventType) searchQuery.eventType = filters.eventType;
     
     return this.find(searchQuery).sort({ startTime: 1 });
+};
+
+// Method to check if registration is open (NEW)
+eventSchema.methods.isRegistrationOpen = function() {
+    if (!this.registrationDeadline) return true;
+    return new Date() < this.registrationDeadline;
+};
+
+// Method to check if event is full (NEW)
+eventSchema.methods.isFull = function() {
+    if (this.maxParticipants === 0) return false;
+    return this.approvedParticipants >= this.maxParticipants;
+};
+
+// Method to approve participant (NEW)
+eventSchema.methods.approveParticipant = function(userId, approvedBy) {
+    const registration = this.registrations.find(r => r.userId.toString() === userId.toString());
+    
+    if (!registration) {
+        throw new Error('Registration not found');
+    }
+    
+    if (registration.approvalStatus === 'approved') {
+        throw new Error('Already approved');
+    }
+    
+    if (this.isFull()) {
+        registration.approvalStatus = 'waitlisted';
+        this.waitlistCount += 1;
+        throw new Error('Event is full, added to waitlist');
+    }
+    
+    registration.approvalStatus = 'approved';
+    registration.approvedBy = approvedBy;
+    registration.approvedAt = new Date();
+    this.approvedParticipants += 1;
+};
+
+// Method to reject participant (NEW)
+eventSchema.methods.rejectParticipant = function(userId, reason, rejectedBy) {
+    const registration = this.registrations.find(r => r.userId.toString() === userId.toString());
+    
+    if (!registration) {
+        throw new Error('Registration not found');
+    }
+    
+    if (registration.approvalStatus === 'rejected') {
+        throw new Error('Already rejected');
+    }
+    
+    const wasApproved = registration.approvalStatus === 'approved';
+    
+    registration.approvalStatus = 'rejected';
+    registration.rejectionReason = reason;
+    registration.approvedBy = rejectedBy;
+    registration.approvedAt = new Date();
+    
+    if (wasApproved) {
+        this.approvedParticipants = Math.max(0, this.approvedParticipants - 1);
+    }
 };
 
 const Event = mongoose.model('Event', eventSchema);
