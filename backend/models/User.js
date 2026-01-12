@@ -12,6 +12,11 @@ const userSchema = new mongoose.Schema(
     clubsManaged: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Club' }],
     department: String,
     semester: Number,
+    cgpa: { type: Number, min: 0, max: 10 },
+    cgpaVerified: { type: Boolean, default: false },
+    cgpaFlagReason: { type: String },
+    cgpaProofUrl: { type: String },
+    cgpaLastUpdated: { type: Date },
   },
   { timestamps: true, versionKey: false }
 );

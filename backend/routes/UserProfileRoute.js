@@ -1,8 +1,9 @@
 import express from 'express';
 import multer from 'multer';
-import { uploadProfilePic, deleteProfilePic } from '../controllers/UserProfileController.js';
+import { uploadProfilePic, deleteProfilePic, updateCgpa } from '../controllers/UserProfileController.js';
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
 import cloudinary from '../config/cloudinary.js';
+import { authenticateToken, requireRole } from '../middlewares/auth.js';
 
 const router = express.Router();
 
@@ -18,5 +19,6 @@ const upload = multer({ storage });
 
 router.post('/uploadProfilePic', upload.single('file'), uploadProfilePic);
 router.delete('/deleteProfilePic', deleteProfilePic);
+router.put('/cgpa', authenticateToken, requireRole(['coordinator', 'admin']), updateCgpa);
 
 export default router;

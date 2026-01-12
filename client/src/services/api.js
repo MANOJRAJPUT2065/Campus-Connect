@@ -63,12 +63,19 @@ export const chatbotAPI = {
 
 // Notices API
 export const noticesAPI = {
-  getAll: () => api.get(API_CONFIG.ENDPOINTS.NOTICES.GET_ALL),
+  getAll: (params) => api.get(API_CONFIG.ENDPOINTS.NOTICES.GET_ALL, { params }),
   getRandom: () => api.get(API_CONFIG.ENDPOINTS.NOTICES.GET_RANDOM),
   getByCategory: (category) => 
     api.get(`${API_CONFIG.ENDPOINTS.NOTICES.GET_BY_CATEGORY}/${category}`),
   search: (query) => 
     api.get(`${API_CONFIG.ENDPOINTS.NOTICES.SEARCH}?q=${query}`),
+  create: (payload) => api.post(API_CONFIG.ENDPOINTS.NOTICES.GET_ALL, payload),
+};
+
+// Materials API
+export const materialsAPI = {
+  list: (params) => api.get('/api/materials', { params }),
+  create: (payload) => api.post('/api/materials', payload),
 };
 
 // Quiz API
@@ -139,8 +146,28 @@ export const coordinatorAPI = {
   sendEventAnnouncement: (eventId, announcement) => 
     api.post(`/api/coordinator/events/${eventId}/announcements`, announcement),
   
+  // Placement / CGPA verification
+  getPlacementStudents: (params) => api.get('/api/coordinator/students', { params }),
+  verifyStudentCgpa: (studentId, payload) => 
+    api.patch(`/api/coordinator/students/${studentId}/cgpa-verification`, payload),
+  validatePlacementCsv: (formData) => api.post('/api/coordinator/placement/validate-csv', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+  uploadOfficialPlacement: (formData) => api.post('/api/coordinator/placement/official/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+  uploadStudentPlacement: (formData) => api.post('/api/coordinator/placement/student/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+  reconcilePlacement: (params) => api.get('/api/coordinator/placement/reconcile', { params }),
+
   // Analytics
   getAnalytics: () => api.get('/api/coordinator/analytics'),
+};
+
+// User profile (student) utilities
+export const profileAPI = {
+  updateCgpa: (payload) => api.put('/api/users/profile/cgpa', payload),
 };
 
 export default {
@@ -150,8 +177,10 @@ export default {
   videoCall: videoCallAPI,
   chatbot: chatbotAPI,
   notices: noticesAPI,
+  materials: materialsAPI,
   quiz: quizAPI,
   chat: chatAPI,
   teacher: teacherAPI,
   coordinator: coordinatorAPI,
+  profile: profileAPI,
 };

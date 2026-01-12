@@ -13,6 +13,8 @@ const QuizPlatform = ({ onClose }) => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [isQuizActive, setIsQuizActive] = useState(false);
   const [quizResults, setQuizResults] = useState([]);
+  const [showResults, setShowResults] = useState(false);
+  const [lastQuizResult, setLastQuizResult] = useState(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newQuiz, setNewQuiz] = useState({
     title: '',
@@ -100,6 +102,27 @@ const QuizPlatform = ({ onClose }) => {
         question: q.question
       }));
 
+      // Calculate detailed results locally
+      const detailedResults = (currentQuiz.questions || []).map((q, idx) => {
+        const userAnswer = userAnswers[idx];
+        const correctAnswer = q.correctAnswer;
+        const isCorrect = userAnswer === correctAnswer;
+        
+        return {
+          question: q.question,
+          options: q.options,
+          userAnswer: userAnswer !== undefined ? userAnswer : null,
+          correctAnswer: correctAnswer,
+          isCorrect: isCorrect,
+          userAnswerText: userAnswer !== undefined ? q.options[userAnswer] : 'Not answered',
+          correctAnswerText: q.options[correctAnswer]
+        };
+      });
+
+      const correctCount = detailedResults.filter(r => r.isCorrect).length;
+      const wrongCount = detailedResults.filter(r => !r.isCorrect && r.userAnswer !== null).length;
+      const skippedCount = detailedResults.filter(r => r.userAnswer === null).length;
+
       const response = await fetch(buildApiUrl('/api/quiz/submit'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -112,12 +135,24 @@ const QuizPlatform = ({ onClose }) => {
       if (response.ok) {
         const data = await response.json();
         const r = data?.results;
-        if (r) {
-          toast.success(`Quiz completed! Score: ${r.score}/${r.totalQuestions}`);
-        } else {
-          toast.success('Quiz submitted');
-        }
-        resetQuiz();
+        
+        // Store detailed results for display
+        setLastQuizResult({
+          quizTitle: currentQuiz.title,
+          totalQuestions: currentQuiz.questions.length,
+          correctCount,
+          wrongCount,
+          skippedCount,
+          score: correctCount,
+          percentage: Math.round((correctCount / currentQuiz.questions.length) * 100),
+          timeTaken: (currentQuiz.timeLimit || 10) * 60 - timeLeft,
+          detailedResults
+        });
+        
+        setShowResults(true);
+        setIsQuizActive(false);
+        
+        toast.success(`Quiz completed! Score: ${correctCount}/${currentQuiz.questions.length}`);
       } else {
         toast.error('Failed to submit quiz');
       }
@@ -144,6 +179,8 @@ const QuizPlatform = ({ onClose }) => {
     setUserAnswers({});
     setTimeLeft(0);
     setIsQuizActive(false);
+    setShowResults(false);
+    setLastQuizResult(null);
   };
 
   const handleAnswerSelect = (answerIndex) => {
@@ -336,6 +373,151 @@ const QuizPlatform = ({ onClose }) => {
                   Next
                 </button>
               )}
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // Show detailed results after quiz submission
+  if (showResults && lastQuizResult) {
+    return (
+      <div className="fixed inset-0 z-50 bg-black bg-opacity-75 flex items-center justify-center p-4">
+        <motion.div 
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto"
+        >
+          {/* Results Header */}
+          <div className="bg-gradient-to-r from-green-600 to-blue-600 text-white p-6 rounded-t-xl">
+            <div className="text-center">
+              <FaTrophy className="text-6xl mx-auto mb-4 text-yellow-300" />
+              <h2 className="text-3xl font-bold mb-2">Quiz Completed!</h2>
+              <p className="text-xl">{lastQuizResult.quizTitle}</p>
+            </div>
+          </div>
+
+          {/* Score Summary */}
+          <div className="p-6 bg-gray-50 border-b">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+              <div className="bg-white p-4 rounded-lg shadow text-center">
+                <div className="text-3xl font-bold text-blue-600">{lastQuizResult.percentage}%</div>
+                <div className="text-sm text-gray-600">Score</div>
+              </div>
+              <div className="bg-white p-4 rounded-lg shadow text-center">
+                <div className="text-3xl font-bold text-green-600">{lastQuizResult.correctCount}</div>
+                <div className="text-sm text-gray-600">Correct</div>
+              </div>
+              <div className="bg-white p-4 rounded-lg shadow text-center">
+                <div className="text-3xl font-bold text-red-600">{lastQuizResult.wrongCount}</div>
+                <div className="text-sm text-gray-600">Wrong</div>
+              </div>
+              <div className="bg-white p-4 rounded-lg shadow text-center">
+                <div className="text-3xl font-bold text-gray-600">{lastQuizResult.skippedCount}</div>
+                <div className="text-sm text-gray-600">Skipped</div>
+              </div>
+            </div>
+            <div className="text-center text-sm text-gray-600">
+              Time Taken: {Math.floor(lastQuizResult.timeTaken / 60)}m {lastQuizResult.timeTaken % 60}s
+            </div>
+          </div>
+
+          {/* Detailed Results */}
+          <div className="p-6">
+            <h3 className="text-2xl font-bold mb-4">Question-by-Question Results</h3>
+            <div className="space-y-4">
+              {lastQuizResult.detailedResults.map((result, index) => (
+                <div
+                  key={index}
+                  className={`p-4 rounded-lg border-2 ${
+                    result.isCorrect
+                      ? 'border-green-500 bg-green-50'
+                      : result.userAnswer === null
+                      ? 'border-gray-300 bg-gray-50'
+                      : 'border-red-500 bg-red-50'
+                  }`}
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1">
+                      <div className="flex items-center mb-2">
+                        {result.isCorrect ? (
+                          <FaCheck className="text-green-600 text-xl mr-2" />
+                        ) : (
+                          <FaTimes className="text-red-600 text-xl mr-2" />
+                        )}
+                        <span className="font-semibold">Question {index + 1}</span>
+                      </div>
+                      <p className="text-lg mb-3">{result.question}</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 ml-7">
+                    {result.options.map((option, optIndex) => {
+                      const isUserAnswer = optIndex === result.userAnswer;
+                      const isCorrectAnswer = optIndex === result.correctAnswer;
+                      
+                      return (
+                        <div
+                          key={optIndex}
+                          className={`p-3 rounded ${
+                            isCorrectAnswer
+                              ? 'bg-green-100 border-2 border-green-500 font-semibold'
+                              : isUserAnswer && !isCorrectAnswer
+                              ? 'bg-red-100 border-2 border-red-500'
+                              : 'bg-white border border-gray-200'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span>{option}</span>
+                            <div className="flex items-center space-x-2">
+                              {isCorrectAnswer && (
+                                <span className="text-green-600 text-sm flex items-center">
+                                  <FaCheck className="mr-1" />
+                                  Correct Answer
+                                </span>
+                              )}
+                              {isUserAnswer && !isCorrectAnswer && (
+                                <span className="text-red-600 text-sm flex items-center">
+                                  <FaTimes className="mr-1" />
+                                  Your Answer
+                                </span>
+                              )}
+                              {isUserAnswer && isCorrectAnswer && (
+                                <span className="text-green-600 text-sm flex items-center">
+                                  <FaCheck className="mr-1" />
+                                  Your Answer
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    
+                    {result.userAnswer === null && (
+                      <div className="text-gray-600 italic text-sm">You didn't answer this question</div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="mt-6 flex justify-center space-x-4">
+              <button
+                onClick={() => setActiveTab('results')}
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
+              >
+                <FaChartBar className="mr-2" />
+                View All Results
+              </button>
+              <button
+                onClick={resetQuiz}
+                className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+              >
+                Back to Quizzes
+              </button>
             </div>
           </div>
         </motion.div>

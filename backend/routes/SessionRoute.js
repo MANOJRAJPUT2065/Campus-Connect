@@ -2,6 +2,12 @@ import express from 'express';
 import Session from '../models/Session.js';
 import { v4 as uuidv4 } from 'uuid';
 import mongoose from 'mongoose';
+import jwt from 'jsonwebtoken';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const jwtKey = process.env.JWT_SECRET || 'secret';
 
 const router = express.Router();
 
@@ -20,10 +26,21 @@ const findSession = async (sessionId) => {
 // Create a new session (Teacher)
 router.post('/create', async (req, res) => {
   try {
-    const { title, description, instructorId, instructorName, maxParticipants = 50, duration = '60 min' } = req.body;
+    const { title, description, instructorId, instructorName, branch, semester, maxParticipants = 50, duration = '60 min' } = req.body;
     
     if (!title || !instructorId) {
       return res.status(400).json({ success: false, error: 'Title and instructor ID required' });
+    }
+
+    // Require targeting info to avoid cross-branch spam
+    if (!branch || semester === undefined || semester === null) {
+      return res.status(400).json({ success: false, error: 'Branch and semester are required' });
+    }
+
+    const normalizedBranch = String(branch).trim().toLowerCase();
+    const normalizedSemester = Number(semester);
+    if (Number.isNaN(normalizedSemester)) {
+      return res.status(400).json({ success: false, error: 'Semester must be a number' });
     }
 
     const channelName = `session-${uuidv4().substring(0, 8)}`;
@@ -34,6 +51,8 @@ router.post('/create', async (req, res) => {
       instructorId: String(instructorId), // Ensure it's a string (email, USN, or ID)
       instructorName: instructorName || 'Instructor',
       channelName,
+      branch: normalizedBranch,
+      semester: normalizedSemester,
       maxParticipants,
       duration,
       status: 'scheduled'
@@ -119,6 +138,24 @@ router.post('/:sessionId/end', async (req, res) => {
   }
 });
 
+// Delete a session (Teacher)
+router.delete('/:sessionId', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const existingSession = await findSession(sessionId);
+
+    if (!existingSession) {
+      return res.status(404).json({ success: false, error: 'Session not found' });
+    }
+
+    await Session.findByIdAndDelete(existingSession._id);
+    res.json({ success: true, message: 'Session deleted' });
+  } catch (error) {
+    console.error('Delete session error:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete session' });
+  }
+});
+
 // Add participant to session
 router.post('/:sessionId/join', async (req, res) => {
   try {
@@ -128,6 +165,29 @@ router.post('/:sessionId/join', async (req, res) => {
     if (!userId || !userName) {
       return res.status(400).json({ success: false, error: 'User ID and name required' });
     }
+
+    // Derive branch/semester from token when possible to prevent spoofing
+    let tokenBranch = null;
+    let tokenSemester = null;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      try {
+        const decoded = jwt.verify(token, jwtKey);
+        tokenBranch = decoded.department || decoded.branch || null;
+        tokenSemester = decoded.semester ?? null;
+      } catch (err) {
+        // If token invalid, we still allow fallback to body values so guests can join where allowed
+      }
+    }
+
+    const providedBranch = req.body.branch || req.body.department || null;
+    const providedSemester = req.body.semester ?? null;
+    const normalizedBranch = tokenBranch
+      ? String(tokenBranch).trim().toLowerCase()
+      : (providedBranch ? String(providedBranch).trim().toLowerCase() : null);
+    const normalizedSemesterRaw = tokenSemester !== null && tokenSemester !== undefined ? tokenSemester : providedSemester;
+    const normalizedSemester = normalizedSemesterRaw !== null && normalizedSemesterRaw !== undefined ? Number(normalizedSemesterRaw) : null;
 
     const session = await findSession(sessionId);
     if (!session) {
@@ -142,6 +202,19 @@ router.post('/:sessionId/join', async (req, res) => {
     if (session.participants.length >= session.maxParticipants) {
       return res.status(400).json({ success: false, error: 'Session is full' });
     }
+
+    const isTeacher = userRole === 'teacher' || userRole === 'instructor';
+    // Remove branch/semester restrictions - allow all students to join any class
+    // if (!isTeacher) {
+    //   if (session.branch && (!normalizedBranch || session.branch !== normalizedBranch)) {
+    //     return res.status(403).json({ success: false, error: 'This class is restricted to a different branch/department' });
+    //   }
+    //   if (session.semester !== null && session.semester !== undefined) {
+    //     if (normalizedSemester === null || Number.isNaN(normalizedSemester) || session.semester !== normalizedSemester) {
+    //       return res.status(403).json({ success: false, error: 'This class is restricted to a different semester' });
+    //     }
+    //   }
+    // }
 
     // Check if user already in session
     const existing = session.participants.find(p => String(p.userId) === String(userId));
@@ -165,11 +238,13 @@ router.post('/:sessionId/join', async (req, res) => {
   }
 });
 
-// Get live sessions (for students)
+// Get live sessions (for students) - no filtering, show all
 router.get('/live', async (req, res) => {
   try {
-    const sessions = await Session.find({ status: 'live' })
-      .populate('instructorId', 'username email')
+    const sessions = await Session.find({ 
+      status: { $in: ['live', 'scheduled', 'active'] } 
+    })
+      .sort({ createdAt: -1 })
       .select('-participants');
 
     res.json({ success: true, sessions });

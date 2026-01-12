@@ -1,7 +1,7 @@
 // client/src/config/api.js
 
 // Base URL configuration - Support both local and production
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:7071';
 
 // API Configuration
 const API_CONFIG = {

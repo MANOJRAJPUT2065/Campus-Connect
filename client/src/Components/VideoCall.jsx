@@ -7,7 +7,17 @@ import API_CONFIG, { buildApiUrl } from '../config/api';
 import { io } from 'socket.io-client';
 import { useEffect as ReactUseEffect } from 'react';
 
-const VideoCall = ({ channelName, onClose, sessionId, roomTitle, userRole = 'student', userName = 'You', initialAgora }) => {
+// Video element styling for Agora tracks
+const videoStyles = `
+  :is([class*="VideoCall"]) video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #000;
+  }
+`;
+
+const VideoCall = ({ channelName, onClose, sessionId, roomTitle, userRole = 'student', userName = 'You', initialAgora, audioOnly = false }) => {
   const [users, setUsers] = useState([]);
   const [start, setStart] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -416,7 +426,28 @@ const VideoCall = ({ channelName, onClose, sessionId, roomTitle, userRole = 'stu
 
         // Create local tracks
         console.log('[Agora] creating local tracks...');
-        const [audioTrack, videoTrack] = await AgoraRTC.createMicrophoneAndCameraTracks();
+        let audioTrack, videoTrack;
+        
+        if (audioOnly) {
+          // Audio-only mode: only create microphone track
+          console.log('[Agora] audio-only mode enabled');
+          audioTrack = await AgoraRTC.createMicrophoneAudioTrack({ AEC: true, ANS: true, AGC: true });
+          videoTrack = null;
+        } else {
+          // Normal mode: create both audio and video tracks
+          try {
+            [audioTrack, videoTrack] = await AgoraRTC.createMicrophoneAndCameraTracks({
+              microphoneConfig: { AEC: true, ANS: true, AGC: true }
+            });
+          } catch (trackError) {
+            console.warn('[Agora] failed to create video track, trying audio-only:', trackError.message);
+            // Fallback to audio-only if camera not available
+            audioTrack = await AgoraRTC.createMicrophoneAudioTrack({ AEC: true, ANS: true, AGC: true });
+            videoTrack = null;
+            toast.warn('Camera not available, joining with audio only');
+          }
+        }
+        
         localAudioTrackRef.current = audioTrack;
         localVideoTrackRef.current = videoTrack;
 
@@ -424,9 +455,10 @@ const VideoCall = ({ channelName, onClose, sessionId, roomTitle, userRole = 'stu
         await client.join(agoraConfig.appId, agoraConfig.channelName, agoraConfig.token, agoraConfig.uid);
         console.log('[Agora] joined channel', agoraConfig.channelName);
         
-        // Publish local tracks
-        await client.publish([audioTrack, videoTrack]);
-        console.log('[Agora] published local tracks');
+        // Publish local tracks (only publish video if it exists)
+        const tracksToPublish = videoTrack ? [audioTrack, videoTrack] : [audioTrack];
+        await client.publish(tracksToPublish);
+        console.log('[Agora] published local tracks', audioOnly ? '(audio-only)' : '(audio + video)');
         
         joinedOnceRef.current = true;
         setStart(true);
@@ -627,11 +659,32 @@ const VideoCall = ({ channelName, onClose, sessionId, roomTitle, userRole = 'stu
 
   // Toggle video
   const toggleVideo = async () => {
-    if (localVideoTrackRef.current) {
-      localVideoTrackRef.current.setEnabled(!isVideoOff);
-      setIsVideoOff(!isVideoOff);
-      toast.info(isVideoOff ? 'Camera enabled' : 'Camera disabled');
+    // Require connected client
+    if (!clientRef.current || !start) {
+      toast.error('Wait for the call to connect first');
+      return;
     }
+
+    // If user joined audio-only or camera was never created, try to create and publish now
+    if (!localVideoTrackRef.current) {
+      try {
+        const camTrack = await AgoraRTC.createCameraVideoTrack();
+        localVideoTrackRef.current = camTrack;
+        await clientRef.current.publish(camTrack);
+        setIsVideoOff(false);
+        toast.success('Camera turned on');
+      } catch (err) {
+        console.error('[Agora] failed to create/publish camera track', err);
+        toast.error('Cannot access camera. Check permissions or close other apps.');
+      }
+      return;
+    }
+
+    const nextOff = !isVideoOff;
+    // setEnabled(true) => show video, false => hide
+    await localVideoTrackRef.current.setEnabled(!nextOff);
+    setIsVideoOff(nextOff);
+    toast.info(nextOff ? 'Camera disabled' : 'Camera enabled');
   };
 
   // Screen sharing using Agora screen video track API
@@ -903,6 +956,7 @@ const VideoCall = ({ channelName, onClose, sessionId, roomTitle, userRole = 'stu
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 relative">
+      <style>{videoStyles}</style>
       {isListening && (
         <div className="absolute top-20 left-4 z-40 bg-green-600 text-white px-3 py-1 rounded-full shadow animate-pulse flex items-center gap-2">
           <span className="inline-block w-2 h-2 bg-white rounded-full animate-ping"></span>
@@ -1008,11 +1062,11 @@ const VideoCall = ({ channelName, onClose, sessionId, roomTitle, userRole = 'stu
       )}
 
              {/* Main Video Area */}
-       <div className="pt-20 pb-32 px-4">
-         {start && (
-           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-7xl mx-auto">
-             {/* Main Video Area - Show screen share when active, otherwise show local video */}
-             <div className="relative bg-black rounded-lg overflow-hidden col-span-full order-first">
+      <div className="pt-16 pb-28 px-0 md:px-2">
+        {start && (
+          <div className="grid grid-cols-1 gap-4 w-full max-w-none">
+            {/* Main Video Area - Show screen share when active, otherwise show local video */}
+            <div className="relative bg-black rounded-lg overflow-hidden col-span-full order-first w-full min-h-[70vh] h-[80vh] md:h-[85vh] lg:h-[90vh] xl:h-[92vh] flex items-center justify-center aspect-video">
                {isScreenSharing && screenTrack ? (
                  // Screen Share (Main View)
                  <div
@@ -1021,7 +1075,7 @@ const VideoCall = ({ channelName, onClose, sessionId, roomTitle, userRole = 'stu
                        screenTrack.play(el);
                      }
                    }}
-                   className="w-full h-96 object-contain"
+                   className="w-full h-full [&>video]:w-full [&>video]:h-full [&>video]:object-contain"
                  />
                ) : (
                  // Local Video (Main View)
@@ -1031,35 +1085,35 @@ const VideoCall = ({ channelName, onClose, sessionId, roomTitle, userRole = 'stu
                        localVideoTrackRef.current.play(el);
                      }
                    }}
-                   className="w-full h-96 object-contain bg-black"
+                   className="w-full h-full bg-black [&>video]:w-full [&>video]:h-full [&>video]:object-cover [&>video]:min-w-full [&>video]:min-h-full"
                  />
                )}
                
                {/* Screen Share Indicator */}
                {isScreenSharing && (
-                 <div className="absolute top-2 right-2 bg-blue-600 text-white px-2 py-1 rounded text-sm">
+                 <div className="absolute top-2 right-2 bg-blue-600 text-white px-2 py-1 rounded text-sm z-10">
                    Presenting
                  </div>
                )}
                
                {/* Local Video Label */}
-               <div className="absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-sm">
+               <div className="absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-sm z-10">
                  {isScreenSharing ? 'Screen Share' : 'You (Local)'}
                </div>
              </div>
 
              {/* Small Local Video Tab (like Zoom) - only when there are remote users or screen share */}
              {(users.length > 0 || isScreenSharing) && (
-               <div className="relative bg-black rounded-lg overflow-hidden w-48 h-32">
+               <div className="relative bg-black rounded-lg overflow-hidden w-48 h-32 shadow-lg border-2 border-gray-700 hover:border-blue-500 transition-colors">
                  <div
                    ref={(el) => {
                      if (el && localVideoTrackRef.current) {
                        localVideoTrackRef.current.play(el);
                      }
                    }}
-                   className="w-full h-full object-cover"
+                   className="w-full h-full [&>video]:w-full [&>video]:h-full [&>video]:object-cover"
                  />
-                 <div className="absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-xs">
+                 <div className="absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-xs z-10">
                    You
                  </div>
                </div>
@@ -1067,16 +1121,16 @@ const VideoCall = ({ channelName, onClose, sessionId, roomTitle, userRole = 'stu
 
             {/* Remote Videos */}
             {users.map((user) => (
-              <div key={user.uid} className="relative bg-black rounded-lg overflow-hidden">
+              <div key={user.uid} className="relative bg-black rounded-lg overflow-hidden shadow-lg border border-gray-700 hover:border-blue-500 transition-colors">
                  <div
                   ref={(el) => {
                     if (el && user.videoTrack) {
                       user.videoTrack.play(el);
                     }
                   }}
-                  className="w-full h-64 object-contain bg-black"
+                  className="w-full h-64 [&>video]:w-full [&>video]:h-full [&>video]:object-contain bg-black"
                 />
-                <div className="absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-sm">
+                <div className="absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-sm z-10">
                   User {user.uid}
                 </div>
               </div>

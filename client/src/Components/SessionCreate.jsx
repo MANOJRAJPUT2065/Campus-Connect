@@ -10,7 +10,9 @@ const SessionCreate = ({ onSessionCreated, onClose }) => {
     title: '',
     description: '',
     duration: 60,
-    maxParticipants: 50
+    maxParticipants: 50,
+    branch: '',
+    semester: ''
   });
   const [loading, setLoading] = useState(false);
 
@@ -18,7 +20,7 @@ const SessionCreate = ({ onSessionCreated, onClose }) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: name === 'duration' || name === 'maxParticipants' ? parseInt(value) : value
+      [name]: name === 'duration' || name === 'maxParticipants' || name === 'semester' ? parseInt(value) : value
     }));
   };
 
@@ -27,6 +29,11 @@ const SessionCreate = ({ onSessionCreated, onClose }) => {
     
     if (!formData.title.trim()) {
       toast.error('Session title is required');
+      return;
+    }
+
+    if (!formData.branch || !formData.semester) {
+      toast.error('Branch/department and semester are required');
       return;
     }
 
@@ -44,6 +51,8 @@ const SessionCreate = ({ onSessionCreated, onClose }) => {
         buildApiUrl('/api/sessions/create'),
         {
           ...formData,
+          branch: formData.branch.trim().toLowerCase(),
+          semester: parseInt(formData.semester, 10),
           instructorId: localStorage.getItem('userId') || 'instructor',
           instructorName: localStorage.getItem('username') || 'Instructor'
         },
@@ -120,6 +129,37 @@ const SessionCreate = ({ onSessionCreated, onClose }) => {
               rows="3"
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Branch / Department *</label>
+              <input
+                type="text"
+                name="branch"
+                value={formData.branch}
+                onChange={handleChange}
+                placeholder="e.g., CSE, ECE"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Semester *</label>
+              <select
+                name="semester"
+                value={formData.semester}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                required
+              >
+                <option value="">Select semester</option>
+                {[1,2,3,4,5,6,7,8].map((sem) => (
+                  <option key={sem} value={sem}>{`Semester ${sem}`}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

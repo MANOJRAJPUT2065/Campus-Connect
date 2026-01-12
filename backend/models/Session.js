@@ -5,9 +5,11 @@ const sessionSchema = new mongoose.Schema(
     title: { type: String, required: true },
     description: String,
     instructorId: { type: String, required: true }, // Can be email, USN, or ObjectId
-    instructorName: String,
+    instructorName: { type: String, default: 'Instructor' },
     channelName: { type: String, unique: true, required: true },
     sessionLink: String,
+    branch: { type: String, default: null },
+    semester: { type: Number, default: null },
     startTime: Date,
     endTime: Date,
     duration: String,

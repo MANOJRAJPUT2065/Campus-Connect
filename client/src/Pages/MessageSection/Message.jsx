@@ -10,7 +10,7 @@ import FriendsList from '../../Components/FriendsList';
 import './Message.css';
 import defaultImage from '../../assets/default.avif';
 
-const socket = io('http://localhost:5000', { transports: ['websocket'], withCredentials: false });
+const socket = io(import.meta.env.VITE_API_URL || 'http://localhost:7071', { transports: ['websocket'], withCredentials: false });
 
 const MessageSection = () => {
   const navigate = useNavigate();
@@ -51,7 +51,7 @@ const MessageSection = () => {
 
   useEffect(() => {
     if (userEmail && recieverId) {
-      axios.get(buildApiUrl(`/api/messages/getMessages/${userEmail}/${recieverId}`))
+      axios.get(buildApiUrl(`/api/messages/getMessages?senderId=${userEmail}&receiverId=${recieverId}`))
       .then(response => {
         setMessages(response.data);
       })
@@ -157,3 +157,5 @@ const MessageSection = () => {
 };
 
 export default MessageSection;
+
+

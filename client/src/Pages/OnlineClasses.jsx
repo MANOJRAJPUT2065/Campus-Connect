@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaVideo, FaUsers, FaCalendar, FaClock, FaPlay, FaStop, FaMicrophone, FaMicrophoneSlash, FaVideoSlash, FaCog, FaBell } from 'react-icons/fa';
+import { FaVideo, FaUsers, FaCalendar, FaClock, FaPlay, FaStop, FaMicrophone, FaMicrophoneSlash, FaVideoSlash, FaCog, FaBell, FaSync, FaGraduationCap } from 'react-icons/fa';
 import VideoCall from '../Components/VideoCall';
 import PushNotifications from '../Components/PushNotifications';
 import { toast } from 'react-toastify';
+import { jwtDecode } from 'jwt-decode';
 import { buildApiUrl } from '../config/api';
 
 const OnlineClasses = () => {
@@ -15,7 +16,7 @@ const OnlineClasses = () => {
   const [showVideoCall, setShowVideoCall] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('live');
   const [isInstructor] = useState(false);
   const [userRole, setUserRole] = useState(null);
 
@@ -25,6 +26,20 @@ const OnlineClasses = () => {
       setLoading(true);
       const role = localStorage.getItem('userRole');
       setUserRole(role);
+
+      // Infer branch/semester from token for student filtering
+      let branch = null;
+      let semester = null;
+      const token = localStorage.getItem('token');
+      if (token) {
+        try {
+          const decoded = jwtDecode(token);
+          branch = decoded.department || decoded.branch || null;
+          semester = decoded.semester ?? null;
+        } catch (err) {
+          // token decode failed; ignore and fallback to open list
+        }
+      }
 
       // Decide primary endpoint by role
       let url = '';
@@ -41,7 +56,8 @@ const OnlineClasses = () => {
         }
         url = buildApiUrl(`/api/sessions/teacher/${encodeURIComponent(instructorId)}`);
       } else {
-        url = buildApiUrl('/api/sessions/live');
+        // Students see all live sessions
+        url = buildApiUrl(`/api/sessions/live`);
       }
 
       const response = await fetch(url, {
@@ -67,12 +83,16 @@ const OnlineClasses = () => {
       }
 
       if (list?.length) {
-        const formattedClasses = list.map((item) => {
+        let formattedClasses = list.map((item) => {
           const isSession = Boolean(item.channelName);
           const participantsCount = item.participants?.length || item.enrolledStudents?.length || 0;
           const maxP = item.maxParticipants || item.maxStudents || 50;
-          const rawStatus = item.status || (isSession ? 'live' : 'upcoming');
-          const normalizedStatus = rawStatus === 'active' ? 'upcoming' : rawStatus;
+          const rawStatus = item.status || (isSession ? 'scheduled' : 'upcoming');
+          // Normalize status: active/ongoing -> live, scheduled -> upcoming for display
+          const normalizedStatus = 
+            rawStatus === 'active' || rawStatus === 'live' || rawStatus === 'ongoing' ? 'live' :
+            rawStatus === 'scheduled' ? 'upcoming' :
+            rawStatus;
 
           return {
             id: item._id || item.id,
@@ -86,9 +106,20 @@ const OnlineClasses = () => {
             status: normalizedStatus,
             meetingId: item.channelName || item._id || item.id,
             isLive: normalizedStatus === 'live',
-            description: item.description
+            description: item.description,
+            branch: item.branch || item.department || 'any',
+            semester: item.semester || item.sem
           };
         });
+
+        // For students/guests, show live and upcoming sessions
+        const roleNow = role || localStorage.getItem('userRole');
+        if (roleNow !== 'teacher') {
+          // Show live + upcoming/scheduled classes for students
+          formattedClasses = formattedClasses.filter((c) => 
+            c.isLive || c.status === 'upcoming' || c.status === 'scheduled'
+          );
+        }
         setClasses(formattedClasses);
         setError(null);
       } else {
@@ -106,6 +137,25 @@ const OnlineClasses = () => {
   useEffect(() => {
     // Fetch events from backend
     fetchEvents();
+
+    // Auto-refresh when user returns to page
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchEvents();
+      }
+    };
+
+    // Auto-refresh every 15 seconds so students see a class as soon as teacher starts
+    const autoRefreshInterval = setInterval(() => {
+      fetchEvents();
+    }, 15000);
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(autoRefreshInterval);
+    };
   }, []);
 
   const joinClass = (classItem) => {
@@ -168,6 +218,19 @@ const OnlineClasses = () => {
             </div>
             
             <div className="flex items-center space-x-4">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => {
+                  fetchEvents();
+                  toast.info('Refreshing classes...');
+                }}
+                className="p-3 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-colors flex items-center gap-2"
+                title="Refresh classes list"
+              >
+                <FaSync className="text-xl" />
+                <span className="hidden sm:inline text-sm">Refresh</span>
+              </motion.button>
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
@@ -239,8 +302,8 @@ const OnlineClasses = () => {
 
         {!loading && classes.length === 0 && !error && (
           <div className="text-center py-12 bg-white rounded-xl">
-            <p className="text-gray-500 text-lg">📅 {userRole === 'teacher' ? 'No classes created yet' : 'No events scheduled yet'}</p>
-            <p className="text-gray-400 text-sm mt-2">{userRole === 'teacher' ? 'Create a class to get started.' : 'Classes will appear here once created.'}</p>
+            <p className="text-gray-500 text-lg">📅 {userRole === 'teacher' ? 'No classes created yet' : 'No live class right now'}</p>
+            <p className="text-gray-400 text-sm mt-2">{userRole === 'teacher' ? 'Create a class to get started.' : 'We’ll show it here as soon as it goes live.'}</p>
           </div>
         )}
 
@@ -277,8 +340,27 @@ const OnlineClasses = () => {
                       <span>{classItem.time} ({classItem.duration})</span>
                     </div>
                     <div className="flex items-center space-x-3 text-gray-600">
+                      <FaGraduationCap className="text-indigo-500" />
+                      <span>{(classItem.branch || 'ANY').toUpperCase()} • Sem {classItem.semester ?? '-'}</span>
+                    </div>
+                    <div className="flex items-center space-x-3 text-gray-600">
                       <FaUsers className="text-purple-500" />
                       <span>{classItem.participants}/{classItem.maxParticipants} participants</span>
+                    </div>
+                    <div className="flex items-center space-x-3 text-gray-600">
+                      <FaPlay className="text-red-500" />
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded">{classItem.meetingId}</span>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(classItem.meetingId || '');
+                            toast.info('Session ID copied');
+                          }}
+                          className="text-blue-500 hover:text-blue-600 text-sm"
+                        >
+                          Copy
+                        </button>
+                      </div>
                     </div>
                   </div>
 

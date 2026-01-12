@@ -31,9 +31,11 @@ const JoinVideoCall = () => {
       if (token) {
         const decoded = jwtDecode(token);
         setUserInfo({
-          userId: decoded.email || decoded.usn || 'guest',
+          userId: decoded.userId || decoded.email || decoded.usn || 'guest',
           userName: decoded.username || 'Guest User',
-          email: decoded.email
+          email: decoded.email,
+          branch: decoded.department || decoded.branch,
+          semester: decoded.semester
         });
       } else {
         setUserInfo({
@@ -71,12 +73,13 @@ const JoinVideoCall = () => {
     }
   };
 
-  const handleJoin = async () => {
+  const handleJoin = async (joinAudioOnly = false) => {
     if (!userInfo || !sessionInfo) return;
 
     try {
       setIsJoining(true);
       const role = localStorage.getItem('userRole') || 'student';
+      const token = localStorage.getItem('token');
       
       // Join the session via backend using the original sessionId parameter
       // (which can be channelName or ObjectId)
@@ -84,11 +87,14 @@ const JoinVideoCall = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
         },
         body: JSON.stringify({
           userId: userInfo.userId,
           userName: userInfo.userName,
-          userRole: role
+          userRole: role,
+          branch: userInfo.branch ? String(userInfo.branch).toLowerCase() : null,
+          semester: userInfo.semester
         })
       });
 
@@ -122,7 +128,8 @@ const JoinVideoCall = () => {
           channelName: data.session.channelName,
           appId: agoraAppId || data.session.agoraAppId || 'demo', 
           token: agoraToken || 'fallback-token',
-          userRole: role
+          userRole: role,
+          audioOnly: joinAudioOnly
         });
         // Update session info
         setSessionInfo(data.session);
@@ -147,6 +154,7 @@ const JoinVideoCall = () => {
         roomTitle={sessionInfo.title}
         userRole={joinData.userRole || 'student'}
         userName={userInfo?.userName || 'Guest User'}
+        audioOnly={joinData.audioOnly || false}
         initialAgora={{
           appId: joinData.appId,
           token: joinData.token,
@@ -272,23 +280,25 @@ const JoinVideoCall = () => {
         </div>
 
         {/* Join Button */}
-        <button
-          onClick={handleJoin}
-          disabled={isJoining}
-          className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition-colors flex items-center justify-center space-x-2"
-        >
-          {isJoining ? (
-            <>
-              <FaSpinner className="animate-spin" />
-              <span>Joining...</span>
-            </>
-          ) : (
-            <>
-              <FaVideo />
-              <span>Join Video Call</span>
-            </>
-          )}
-        </button>
+        <div className="flex flex-col gap-3">
+          <button
+            onClick={() => handleJoin(false)}
+            disabled={isJoining}
+            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition-colors flex items-center justify-center space-x-2"
+          >
+            <FaVideo />
+            <span>{isJoining ? 'Joining...' : 'Join with Camera'}</span>
+          </button>
+          
+          <button
+            onClick={() => handleJoin(true)}
+            disabled={isJoining}
+            className="w-full bg-gray-700 hover:bg-gray-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition-colors flex items-center justify-center space-x-2"
+          >
+            <FaMicrophone />
+            <span>{isJoining ? 'Joining...' : 'Join Audio Only'}</span>
+          </button>
+        </div>
 
         <button
           onClick={() => navigate('/online-classes')}

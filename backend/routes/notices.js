@@ -1,5 +1,7 @@
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
+import Notice from '../models/Notice.js';
+import { authenticateToken, optionalAuth, requireRole } from '../middlewares/auth.js';
 
 const router = express.Router();
 
@@ -202,51 +204,79 @@ const getNoticesByPriority = (priority) => {
   return sampleNotices.filter(notice => notice.priority === priority);
 };
 
-// GET /api/notices - Get all notices (with optional filtering)
-router.get('/', (req, res) => {
+// GET /api/notices - Get notices with optional targeting
+router.get('/', optionalAuth, async (req, res) => {
   try {
-    const { category, priority, limit, search } = req.query;
-    
-    let filteredNotices = [...sampleNotices];
-    
-    // Filter by category
-    if (category && category !== 'all') {
-      filteredNotices = filteredNotices.filter(notice => notice.category === category);
+    const { category, priority, limit, search, branch, semester } = req.query;
+
+    // Derive branch/sem from token for students
+    const tokenBranch = req.user?.department || req.user?.branch || null;
+    const tokenSemester = req.user?.semester ?? null;
+
+    const filters = [{ isActive: true }];
+
+    // Target role filter when requester is student
+    if (req.user?.role === 'student') {
+      filters.push({ targetRoles: { $in: ['student', 'all'] } });
     }
-    
-    // Filter by priority
-    if (priority) {
-      filteredNotices = filteredNotices.filter(notice => notice.priority === priority);
+
+    // Branch / semester targeting
+    const effectiveBranch = branch || tokenBranch;
+    const effectiveSemester = semester ?? tokenSemester;
+
+    if (effectiveBranch) {
+      filters.push({ $or: [
+        { branch: effectiveBranch.toLowerCase() },
+        { branch: null },
+        { branch: { $exists: false } },
+        { branch: '' }
+      ] });
     }
-    
-    // Search functionality
-    if (search) {
-      const searchLower = search.toLowerCase();
-      filteredNotices = filteredNotices.filter(notice => 
-        notice.title.toLowerCase().includes(searchLower) ||
-        notice.content.toLowerCase().includes(searchLower) ||
-        notice.author.toLowerCase().includes(searchLower)
-      );
-    }
-    
-    // Apply limit
-    if (limit) {
-      filteredNotices = filteredNotices.slice(0, parseInt(limit));
-    }
-    
-    // Sort by priority and date
-    filteredNotices.sort((a, b) => {
-      const priorityOrder = { high: 3, medium: 2, low: 1 };
-      if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
-        return priorityOrder[b.priority] - priorityOrder[a.priority];
+
+    if (effectiveSemester !== undefined && effectiveSemester !== null) {
+      const semNum = Number(effectiveSemester);
+      if (!Number.isNaN(semNum)) {
+        filters.push({ $or: [
+          { semester: semNum },
+          { semester: null },
+          { semester: { $exists: false } }
+        ] });
       }
-      return new Date(b.date) - new Date(a.date);
-    });
-    
+    }
+
+    if (category && category !== 'all') {
+      filters.push({ category });
+    }
+
+    if (priority) {
+      filters.push({ priority });
+    }
+
+    if (search) {
+      const regex = new RegExp(search, 'i');
+      filters.push({ $or: [
+        { title: regex },
+        { content: regex },
+        { authorName: regex }
+      ] });
+    }
+
+    const dbNotices = await Notice.find(filters.length ? { $and: filters } : {})
+      .sort({ priority: -1, publishedAt: -1 })
+      .lean();
+
+    // Fallback to sample notices if database empty
+    let notices = dbNotices;
+    if (!dbNotices.length) {
+      notices = [...sampleNotices];
+    }
+
+    const limited = limit ? notices.slice(0, parseInt(limit)) : notices;
+
     res.json({
       success: true,
-      notices: filteredNotices,
-      total: filteredNotices.length,
+      notices: limited,
+      total: limited.length,
       categories: ['academic', 'event', 'urgent', 'general', 'career', 'research'],
       priorities: ['high', 'medium', 'low']
     });
@@ -256,6 +286,42 @@ router.get('/', (req, res) => {
       success: false,
       error: 'Internal server error'
     });
+  }
+});
+
+// POST /api/notices - Create notice (coordinator/teacher/admin)
+router.post('/', authenticateToken, requireRole(['coordinator', 'teacher', 'admin']), async (req, res) => {
+  try {
+    const { title, content, category = 'general', priority = 'medium', branch, semester, targetRoles = ['student'], attachments = [] } = req.body;
+
+    if (!title || !content) {
+      return res.status(400).json({ success: false, error: 'Title and content are required' });
+    }
+
+    const materializedBranch = branch ? String(branch).trim().toLowerCase() : null;
+    const materializedSemester = semester !== undefined && semester !== null ? Number(semester) : null;
+    if (materializedSemester !== null && Number.isNaN(materializedSemester)) {
+      return res.status(400).json({ success: false, error: 'Semester must be a number' });
+    }
+
+    const notice = await Notice.create({
+      title,
+      content,
+      category,
+      priority,
+      branch: materializedBranch,
+      semester: materializedSemester,
+      targetRoles: targetRoles.length ? targetRoles : ['student'],
+      attachments,
+      authorId: req.user.userId || req.user.email,
+      authorName: req.user.username || req.user.email,
+      authorRole: req.user.role || 'coordinator'
+    });
+
+    res.status(201).json({ success: true, notice });
+  } catch (error) {
+    console.error('Error creating notice:', error);
+    res.status(500).json({ success: false, error: 'Failed to create notice' });
   }
 });
 

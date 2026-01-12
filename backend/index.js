@@ -28,6 +28,7 @@ import commentRoute from './routes/CommentRoute.js';
 import messageRoute from './routes/MessageRoute.js';
 import notesRoute from './routes/NotesRoute.js';
 import noticesRoute from './routes/notices.js';
+import materialsRoute from './routes/materials.js';
 import quizRoute from './routes/quiz.js';
 import calendarSyncRoute from './routes/calendar-sync.js';
 import lectureRecordingsRoute from './routes/lecture-recordings.js';
@@ -37,8 +38,20 @@ import recommendationsRoute from './routes/recommendations.js';
 import teacherRoute from './routes/TeacherRoute.js';
 import coordinatorRoute from './routes/CoordinatorRoute.js';
 
+// Cloudinary
+import { v2 as cloudinary } from 'cloudinary';
+import multer from 'multer';
+import fs from 'fs';
+
 // Load environment variables
 dotenv.config();
+
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
 
 const app = express();
 const server = http.createServer(app);
@@ -55,6 +68,26 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Multer setup for file uploads
+const uploadDir = 'uploads';
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    cb(null, `${Date.now()}-${file.originalname}`);
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 100 * 1024 * 1024 } // 100MB
+});
 
 // Lightweight request logger for key APIs
 app.use((req, res, next) => {
@@ -74,6 +107,82 @@ app.use('/uploads', express.static('uploads'));
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('✅ Connected to MongoDB'))
   .catch((err) => console.error('❌ MongoDB connection error:', err));
+
+// Cloudinary Config Endpoint - for client-side uploads
+app.get('/api/cloudinary-config', (req, res) => {
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  const uploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET || 'meta_verse_materials';
+  
+  if (!cloudName) {
+    return res.status(500).json({
+      success: false,
+      error: 'Cloudinary not configured'
+    });
+  }
+
+  res.json({
+    success: true,
+    cloudName,
+    uploadPreset
+  });
+});
+
+// File Upload Endpoint (Server-side upload)
+app.post('/api/upload', upload.single('file'), async (req, res) => {
+  try {
+    // Check if file exists
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'No file uploaded'
+      });
+    }
+
+    // Choose resource_type to keep PDFs/docs downloadable/viewable
+    const mime = req.file.mimetype || '';
+    const isDocLike = mime.includes('pdf') || mime.includes('msword') || mime.includes('officedocument') || mime.includes('text');
+    const resourceType = isDocLike ? 'raw' : 'auto';
+
+    const uploadOptions = {
+      folder: 'study-materials',
+      resource_type: resourceType,
+      type: 'upload'
+    };
+
+    // Force inline display for PDFs to avoid “Failed to load PDF” viewer errors
+    if (mime.includes('pdf')) {
+      uploadOptions.flags = ['attachment:false'];
+    }
+
+    // Upload to Cloudinary
+    const result = await cloudinary.uploader.upload(req.file.path, uploadOptions);
+
+    // Delete local file after upload
+    fs.unlink(req.file.path, (err) => {
+      if (err) console.error('Error deleting temp file:', err);
+    });
+
+    res.json({
+      success: true,
+      url: result.secure_url,
+      publicId: result.public_id
+    });
+  } catch (error) {
+    console.error('Upload error:', error);
+    
+    // Clean up uploaded file on error
+    if (req.file) {
+      fs.unlink(req.file.path, (err) => {
+        if (err) console.error('Error deleting temp file:', err);
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to upload file'
+    });
+  }
+});
 
 // Routes - MUST be before static file serving in production
 app.use('/api/users', userRoute);
@@ -97,6 +206,7 @@ app.use('/api/comments', commentRoute);
 app.use('/api/messages', messageRoute);
 app.use('/api/notes', notesRoute);
 app.use('/api/notices', noticesRoute);
+app.use('/api/materials', materialsRoute);
 app.use('/api/quiz', quizRoute);
 
 // New Advanced Features - Now Enabled
@@ -169,6 +279,45 @@ io.on('connection', (socket) => {
   // Handle chat messages
   socket.on('send-message', (data) => {
     io.to(data.roomId).emit('new-message', data);
+  });
+
+  // Handle direct messaging (1-on-1 chat)
+  socket.on('join', ({ userId, receiverId }) => {
+    const roomId = [userId, receiverId].sort().join('_');
+    socket.join(roomId);
+    console.log(`💬 User ${userId} joined chat room: ${roomId}`);
+  });
+
+  socket.on('sendMessage', async (data) => {
+    const { senderId, receiverId, message } = data;
+    
+    // Save to database
+    try {
+      const { default: MessageModel } = await import('../models/Messages.js');
+      const newMsg = await MessageModel.create({
+        senderId,
+        receiverId,
+        message,
+        createdAt: new Date()
+      });
+
+      // Create room ID for direct messaging
+      const roomId = [senderId, receiverId].sort().join('_');
+      
+      // Broadcast to both users
+      io.to(roomId).emit('receiveMessage', {
+        _id: newMsg._id,
+        senderId,
+        receiverId,
+        message,
+        createdAt: newMsg.createdAt
+      });
+      
+      console.log(`📨 Message sent from ${senderId} to ${receiverId}`);
+    } catch (error) {
+      console.error('Error saving message:', error);
+      socket.emit('error', { message: 'Failed to send message' });
+    }
   });
 
   // Raise hand in meeting

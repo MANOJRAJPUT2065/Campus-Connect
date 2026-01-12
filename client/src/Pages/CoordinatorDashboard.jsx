@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaCalendar, FaUsers, FaPlus, FaEdit, FaTrash, FaSignOutAlt, FaChartBar, FaBell } from 'react-icons/fa';
+import { FaCalendar, FaUsers, FaPlus, FaEdit, FaTrash, FaSignOutAlt, FaChartBar, FaBell, FaSearch, FaExclamationTriangle, FaCheckCircle } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import { buildApiUrl } from '../config/api';
 import { jwtDecode } from 'jwt-decode';
+import CoordinatorNoticePanel from '../Components/CoordinatorNoticePanel';
 
 const CoordinatorDashboard = () => {
   const navigate = useNavigate();
@@ -14,6 +15,7 @@ const CoordinatorDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [showEventModal, setShowEventModal] = useState(false);
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
+  const [showNoticeModal, setShowNoticeModal] = useState(false);
   const [eventFormData, setEventFormData] = useState({
     clubName: '',
     clubCoordinator: '',
@@ -30,6 +32,20 @@ const CoordinatorDashboard = () => {
     content: '',
     type: 'info'
   });
+  const [placementFilters, setPlacementFilters] = useState({ minCgpa: 0, flaggedOnly: true, mismatchOnly: true, search: '' });
+  const [students, setStudents] = useState([]);
+  const [studentsLoading, setStudentsLoading] = useState(false);
+  const [verifyingStudentId, setVerifyingStudentId] = useState(null);
+  const [csvResults, setCsvResults] = useState([]);
+  const [csvUploading, setCsvUploading] = useState(false);
+  const [csvFileName, setCsvFileName] = useState('');
+  const [mapping, setMapping] = useState({ usn: '', name: '', branch: '', batchYear: '', enteredCgpa: '' });
+  const [companyId, setCompanyId] = useState('');
+  const [reconcileRows, setReconcileRows] = useState([]);
+  const [officialData, setOfficialData] = useState([]);
+  const [studentData, setStudentData] = useState([]);
+  const [officialCount, setOfficialCount] = useState(0);
+  const [studentCount, setStudentCount] = useState(0);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -56,6 +72,53 @@ const CoordinatorDashboard = () => {
     fetchData();
   }, []);
 
+  const fetchPlacementData = async (overrides = {}) => {
+    const nextFilters = { ...placementFilters, ...overrides };
+    if (Object.keys(overrides).length) {
+      setPlacementFilters(nextFilters);
+    }
+
+    try {
+      setStudentsLoading(true);
+      const token = localStorage.getItem('token');
+
+      const params = new URLSearchParams();
+      if (nextFilters.minCgpa && Number(nextFilters.minCgpa) > 0) {
+        params.append('minCgpa', nextFilters.minCgpa);
+      }
+      if (nextFilters.search) {
+        params.append('search', nextFilters.search.trim());
+      }
+      if (nextFilters.flaggedOnly) {
+        params.append('flaggedOnly', 'true');
+      }
+      if (nextFilters.mismatchOnly) {
+        params.append('mismatchOnly', 'true');
+      }
+
+      const query = params.toString();
+      const url = buildApiUrl(`/api/coordinator/students${query ? `?${query}` : ''}`);
+
+      const res = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setStudents(data.students || []);
+      } else {
+        toast.error(data.message || 'Failed to load students');
+      }
+    } catch (error) {
+      console.error('Error fetching placement data:', error);
+      toast.error('Failed to load student list');
+    } finally {
+      setStudentsLoading(false);
+    }
+  };
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -74,6 +137,9 @@ const CoordinatorDashboard = () => {
 
       // Announcements - optional, might not exist
       // setAnnouncements([]);
+
+      fetchPlacementData();
+      fetchReconcile();
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -181,6 +247,195 @@ const CoordinatorDashboard = () => {
     }
   };
 
+  const handleCgpaVerification = async (studentId, verified) => {
+    try {
+      setVerifyingStudentId(`${studentId}-${verified}`);
+      const token = localStorage.getItem('token');
+
+      const response = await fetch(buildApiUrl(`/api/coordinator/students/${studentId}/cgpa-verification`), {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ verified })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        toast.success(verified ? 'CGPA verified' : 'CGPA flagged');
+        fetchPlacementData();
+      } else {
+        toast.error(data.message || 'Could not update CGPA status');
+      }
+    } catch (error) {
+      console.error('Error verifying CGPA:', error);
+      toast.error('Failed to update CGPA status');
+    } finally {
+      setVerifyingStudentId(null);
+    }
+  };
+
+  const handleCsvUpload = async (file) => {
+    if (!file) return;
+    setCsvFileName(file.name);
+    const formData = new FormData();
+    formData.append('file', file);
+    const trimmedMapping = Object.fromEntries(Object.entries(mapping).filter(([, v]) => v && v.trim().length > 0));
+    if (Object.keys(trimmedMapping).length > 0) {
+      formData.append('mapping', JSON.stringify(trimmedMapping));
+    }
+
+    try {
+      setCsvUploading(true);
+      const token = localStorage.getItem('token');
+
+      const response = await fetch(buildApiUrl('/api/coordinator/placement/validate-csv'), {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setCsvResults(data.rows || []);
+        toast.success('CSV validated');
+      } else {
+        toast.error(data.message || 'Failed to validate CSV');
+      }
+    } catch (error) {
+      console.error('Error uploading CSV:', error);
+      toast.error('Failed to upload CSV');
+    } finally {
+      setCsvUploading(false);
+    }
+  };
+
+  const handleOfficialUpload = async (file) => {
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    const trimmedMapping = Object.fromEntries(Object.entries(mapping).filter(([, v]) => v && v.trim().length > 0));
+    if (Object.keys(trimmedMapping).length > 0) {
+      formData.append('mapping', JSON.stringify(trimmedMapping));
+    }
+    try {
+      setCsvUploading(true);
+      const token = localStorage.getItem('token');
+      const res = await fetch(buildApiUrl('/api/coordinator/placement/official/upload'), {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.success) {
+        setOfficialCount(data.count || 0);
+        toast.success(`✅ Official file uploaded: ${data.count} rows`);
+        if (data.skipped > 0) {
+          toast.warning(`⚠️ Skipped ${data.skipped} rows (missing USN)`);
+        }
+        toast.info('📋 Now upload student file, then press Validate to compare');
+      } else {
+        toast.error(data.message || 'Upload failed');
+      }
+    } catch (error) {
+      console.error('Official upload error:', error);
+      toast.error('Failed to upload official file');
+    } finally {
+      setCsvUploading(false);
+    }
+  };
+
+  const handleStudentUpload = async (file) => {
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('companyId', companyId || 'default-company');
+    formData.append('companyName', companyId || 'Default Company');
+    const trimmedMapping = Object.fromEntries(Object.entries(mapping).filter(([, v]) => v && v.trim().length > 0));
+    if (Object.keys(trimmedMapping).length > 0) {
+      formData.append('mapping', JSON.stringify(trimmedMapping));
+    }
+    try {
+      setCsvUploading(true);
+      const token = localStorage.getItem('token');
+      const res = await fetch(buildApiUrl('/api/coordinator/placement/student/upload'), {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.success) {
+        setStudentCount(data.count || 0);
+        toast.success(`✅ Student file uploaded: ${data.count} rows`);
+        if (data.skipped > 0) {
+          toast.warning(`⚠️ Skipped ${data.skipped} rows (missing USN)`);
+        }
+        if (officialCount > 0) {
+          toast.info('🔍 Press Validate to compare both files');
+        } else {
+          toast.info('📋 Upload official file first to enable validation');
+        }
+      } else {
+        toast.error(data.message || 'Upload failed');
+      }
+    } catch (error) {
+      console.error('Student upload error:', error);
+      toast.error('Failed to upload student file');
+    } finally {
+      setCsvUploading(false);
+    }
+  };
+
+  async function fetchReconcile(overrides = {}) {
+    const filters = {
+      flaggedOnly: placementFilters.flaggedOnly,
+      minCgpa: placementFilters.minCgpa,
+      search: placementFilters.search,
+      ...overrides,
+    };
+    console.log('📊 Validate clicked with filters:', filters);
+    try {
+      setStudentsLoading(true);
+      const token = localStorage.getItem('token');
+      const params = new URLSearchParams();
+      if (filters.flaggedOnly) params.append('flaggedOnly', 'true');
+      if (filters.mismatchOnly) params.append('mismatchOnly', 'true');
+      if (filters.minCgpa) params.append('minCgpa', filters.minCgpa);
+      if (filters.search) params.append('search', filters.search.trim());
+      if (companyId) params.append('companyId', companyId);
+      const qs = params.toString();
+      const url = buildApiUrl(`/api/coordinator/placement/reconcile${qs ? `?${qs}` : ''}`);
+      console.log('📡 Fetching from:', url);
+      const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+      const data = await res.json();
+      console.log('📥 Response:', data);
+      if (data.success) {
+        const rows = data.rows || [];
+        setReconcileRows(rows);
+        setOfficialData(data.officialData || []);
+        setStudentData(data.studentData || []);
+        if (rows.length === 0) {
+          toast.info('✅ No mismatches found - all CGPA values match!');
+        } else {
+          toast.success(`Found ${rows.length} mismatches`);
+        }
+        return rows;
+      } else {
+        setReconcileRows([]);
+        toast.info(data.message || 'Upload both official and student files to validate');
+      }
+    } catch (error) {
+      console.error('Error fetching reconciliation:', error);
+      toast.error('Failed to load reconciliation');
+    } finally {
+      setStudentsLoading(false);
+    }
+    return null;
+  }
+
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('userRole');
@@ -230,6 +485,15 @@ const CoordinatorDashboard = () => {
           >
             <FaPlus />
             Create Event
+          </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setShowNoticeModal(true)}
+            className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-lg transition-colors"
+          >
+            <FaBell />
+            Create Notice
           </motion.button>
           <motion.button
             whileHover={{ scale: 1.05 }}
@@ -566,7 +830,399 @@ const CoordinatorDashboard = () => {
             </div>
           </motion.div>
         </div>
+
+        {/* Placement Validation */}
+        <div className="mt-12 bg-white rounded-xl shadow p-6 border border-gray-100">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">Placement CGPA Validation</h2>
+              <p className="text-gray-600 text-sm">Two uploads: official (academics) and student (per company). We join by USN, derive batch from USN, flag mismatches in real time.</p>
+            </div>
+            <div className="flex gap-3 items-center">
+              <button
+                onClick={async () => {
+                  if (!window.confirm('⚠️ Clear ALL placement data (official + student)? This cannot be undone!')) return;
+                  try {
+                    const token = localStorage.getItem('token');
+                    const res = await fetch(buildApiUrl('/api/coordinator/placement/purge'), {
+                      method: 'POST',
+                      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ scope: 'all' })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                      toast.success(`🗑️ Cleared: ${data.officialDeleted || 0} official + ${data.studentDeleted || 0} student records`);
+                      setOfficialCount(0);
+                      setStudentCount(0);
+                      setReconcileRows([]);
+                    } else {
+                      toast.error(data.message || 'Failed to clear data');
+                    }
+                  } catch (err) {
+                    console.error('Purge error:', err);
+                    toast.error('Failed to clear data');
+                  }
+                }}
+                className="px-4 py-2 border border-red-200 rounded-lg text-sm text-red-700 hover:bg-red-50 flex items-center gap-2"
+              >
+                <FaTrash size={14} /> Clear All Data
+              </button>
+              <button
+                onClick={() => fetchReconcile({ flaggedOnly: false, mismatchOnly: true })}
+                className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+              >
+                <FaSearch size={14} /> Validate
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div className="border border-gray-200 rounded-lg p-4">
+              <h3 className="font-semibold text-gray-900 mb-2">Official upload (academics CSV/Excel)</h3>
+              <p className="text-xs text-gray-600 mb-3">Fields: Name, USN, Branch, Batch, Official CGPA.</p>
+              <label className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg cursor-pointer inline-flex items-center gap-2">
+                <FaPlus /> Upload Official
+                <input type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={(e) => handleOfficialUpload(e.target.files?.[0])} disabled={csvUploading} />
+              </label>
+              <div className="text-xs text-gray-500 mt-2">Last rows ingested: {officialCount}</div>
+            </div>
+            <div className="border border-gray-200 rounded-lg p-4">
+              <h3 className="font-semibold text-gray-900 mb-2">Student upload (per company)</h3>
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  type="text"
+                  value={companyId}
+                  onChange={(e) => setCompanyId(e.target.value)}
+                  placeholder="Company ID or name"
+                  className="px-3 py-2 border border-gray-200 rounded w-full"
+                />
+              </div>
+              <label className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg cursor-pointer inline-flex items-center gap-2">
+                <FaPlus /> Upload Student
+                <input type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={(e) => handleStudentUpload(e.target.files?.[0])} disabled={csvUploading} />
+              </label>
+              <div className="text-xs text-gray-500 mt-2">Last rows ingested: {studentCount}</div>
+            </div>
+          </div>
+
+          <details className="mb-4 bg-gray-50 border border-gray-200 rounded-lg p-3">
+            <summary className="text-sm font-semibold text-gray-800 cursor-pointer">Advanced: custom column mapping (leave empty to auto-detect)</summary>
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+              {[['usn','USN header'],['enteredCgpa','Entered CGPA header'],['name','Name header'],['branch','Branch header'],['batchYear','Batch Year header']].map(([key,label]) => (
+                <label key={key} className="flex flex-col gap-1 text-gray-700">
+                  <span>{label}</span>
+                  <input
+                    value={mapping[key]}
+                    onChange={(e) => setMapping({ ...mapping, [key]: e.target.value })}
+                    placeholder="e.g. USN"
+                    className="px-3 py-2 border border-gray-200 rounded"
+                  />
+                </label>
+              ))}
+            </div>
+          </details>
+
+          <div className="flex flex-wrap gap-4 mb-4">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={placementFilters.flaggedOnly}
+                onChange={(e) => {
+                  const next = { ...placementFilters, flaggedOnly: e.target.checked };
+                  setPlacementFilters(next);
+                  fetchReconcile({ flaggedOnly: e.target.checked });
+                }}
+              />
+              <span className="text-sm text-gray-700">Show flagged only</span>
+            </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={placementFilters.mismatchOnly}
+                  onChange={(e) => {
+                    const next = { ...placementFilters, mismatchOnly: e.target.checked };
+                    setPlacementFilters(next);
+                    fetchReconcile({ mismatchOnly: e.target.checked });
+                  }}
+                />
+                <span className="text-sm text-gray-700">Show only CGPA mismatches</span>
+              </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                max="10"
+                value={placementFilters.minCgpa}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setPlacementFilters({ ...placementFilters, minCgpa: val });
+                  fetchReconcile({ minCgpa: val });
+                }}
+                className="w-24 px-3 py-2 border border-gray-200 rounded"
+                placeholder="Min CGPA"
+              />
+              <span className="text-sm text-gray-600">Min CGPA (eligible only)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={placementFilters.search}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setPlacementFilters({ ...placementFilters, search: val });
+                  fetchReconcile({ search: val });
+                }}
+                className="px-3 py-2 border border-gray-200 rounded"
+                placeholder="Search name/USN"
+              />
+              <FaSearch className="text-gray-400" />
+            </div>
+            {companyId && <div className="text-sm text-gray-500">Company: <span className="font-medium text-gray-800">{companyId}</span></div>}
+          </div>
+
+          {/* Validation preview removed; press Validate to show results below */}
+
+          {/* Official Data Table */}
+          {officialData.length > 0 && (
+            <div className="mb-6">
+              <h4 className="text-lg font-semibold text-gray-900 mb-2">📋 Official File ({officialData.length} records)</h4>
+              <div className="overflow-x-auto rounded-lg border border-blue-100 bg-blue-50">
+                <table className="min-w-full divide-y divide-blue-100">
+                  <thead className="bg-blue-100">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-blue-900">USN</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-blue-900">Name</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-blue-900">Branch</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-blue-900">Batch</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-blue-900">Official CGPA</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-blue-100 text-xs">
+                    {officialData.slice(0, 10).map((row) => (
+                      <tr key={row.usn} className="bg-white">
+                        <td className="px-3 py-2 font-mono text-gray-900">{row.usn}</td>
+                        <td className="px-3 py-2 text-gray-700">{row.name || '-'}</td>
+                        <td className="px-3 py-2 text-gray-700">{row.branch || '-'}</td>
+                        <td className="px-3 py-2 text-gray-700">{row.derivedBatch || row.batchYear || '-'}</td>
+                        <td className="px-3 py-2 font-semibold text-blue-700">{row.officialCgpa ?? '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {officialData.length > 10 && <p className="text-xs text-gray-500 mt-1">Showing first 10 of {officialData.length} records</p>}
+            </div>
+          )}
+
+          {/* Student Data Table */}
+          {studentData.length > 0 && (
+            <div className="mb-6">
+              <h4 className="text-lg font-semibold text-gray-900 mb-2">📊 Student File ({studentData.length} records)</h4>
+              <div className="overflow-x-auto rounded-lg border border-green-100 bg-green-50">
+                <table className="min-w-full divide-y divide-green-100">
+                  <thead className="bg-green-100">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-green-900">USN</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-green-900">Name</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-green-900">Branch</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-green-900">Batch</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-green-900">Entered CGPA</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-green-900">Company</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-green-100 text-xs">
+                    {studentData.slice(0, 10).map((row) => (
+                      <tr key={`${row.usn}-${row.companyId}`} className="bg-white">
+                        <td className="px-3 py-2 font-mono text-gray-900">{row.usn}</td>
+                        <td className="px-3 py-2 text-gray-700">{row.name || '-'}</td>
+                        <td className="px-3 py-2 text-gray-700">{row.branch || '-'}</td>
+                        <td className="px-3 py-2 text-gray-700">{row.derivedBatch || row.batchYear || '-'}</td>
+                        <td className="px-3 py-2 font-semibold text-green-700">{row.enteredCgpa ?? '-'}</td>
+                        <td className="px-3 py-2 text-gray-600 text-xs">{row.companyName}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {studentData.length > 10 && <p className="text-xs text-gray-500 mt-1">Showing first 10 of {studentData.length} records</p>}
+            </div>
+          )}
+
+          {/* Official Data Table */}
+          {officialData.length > 0 && (
+            <div className="mb-6">
+              <h4 className="text-lg font-semibold text-blue-900 mb-2">📋 Official File ({officialData.length} records)</h4>
+              <div className="overflow-x-auto rounded-lg border border-blue-100 bg-blue-50">
+                <table className="min-w-full divide-y divide-blue-100">
+                  <thead className="bg-blue-100">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-blue-900">USN</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-blue-900">Name</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-blue-900">Branch</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-blue-900">Batch</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-blue-900">Official CGPA</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-blue-100 bg-white">
+                    {officialData.slice(0, 10).map((row) => (
+                      <tr key={`official-${row.usn}`}>
+                        <td className="px-4 py-3 text-sm font-mono text-gray-800">{row.usn}</td>
+                        <td className="px-4 py-3 text-sm text-gray-800">{row.name || '-'}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600">{row.branch || '-'}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600">{row.derivedBatch || row.batchYear || '-'}</td>
+                        <td className="px-4 py-3 text-sm font-semibold text-blue-800">{row.officialCgpa ?? '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {officialData.length > 10 && (
+                <p className="text-xs text-gray-500 mt-1">Showing 10 of {officialData.length} records</p>
+              )}
+            </div>
+          )}
+
+          {/* Student Data Table */}
+          {studentData.length > 0 && (
+            <div className="mb-6">
+              <h4 className="text-lg font-semibold text-green-900 mb-2">👥 Student File ({studentData.length} records)</h4>
+              <div className="overflow-x-auto rounded-lg border border-green-100 bg-green-50">
+                <table className="min-w-full divide-y divide-green-100">
+                  <thead className="bg-green-100">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-green-900">USN</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-green-900">Name</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-green-900">Branch</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-green-900">Batch</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-green-900">Entered CGPA</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-green-900">Company</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-green-100 bg-white">
+                    {studentData.slice(0, 10).map((row) => (
+                      <tr key={`student-${row.usn}-${row.companyId}`}>
+                        <td className="px-4 py-3 text-sm font-mono text-gray-800">{row.usn}</td>
+                        <td className="px-4 py-3 text-sm text-gray-800">{row.name || '-'}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600">{row.branch || '-'}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600">{row.derivedBatch || row.batchYear || '-'}</td>
+                        <td className="px-4 py-3 text-sm font-semibold text-green-800">{row.enteredCgpa ?? '-'}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600">{row.companyName || row.companyId || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {studentData.length > 10 && (
+                <p className="text-xs text-gray-500 mt-1">Showing 10 of {studentData.length} records</p>
+              )}
+            </div>
+          )}
+
+          {/* Reconciliation Table - Mismatches */}
+          {reconcileRows.length > 0 && (
+            <div className="mb-6">
+              <h4 className="text-lg font-semibold text-red-900 mb-2">⚠️ Mismatches Found ({reconcileRows.length} records)</h4>
+              <div className="overflow-x-auto rounded-lg border border-red-100 bg-red-50">
+                <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">USN</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Name</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Branch</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Batch</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">CGPA</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Eligible</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 bg-white">
+                {(csvUploading || studentsLoading) && (
+                  <tr>
+                    <td colSpan="9" className="px-4 py-6 text-center text-gray-500">Processing...</td>
+                  </tr>
+                )}
+
+                {!csvUploading && !studentsLoading && reconcileRows.length === 0 && (
+                  <tr>
+                    <td colSpan="9" className="px-4 py-6 text-center text-gray-500">Upload official + student files to see results.</td>
+                  </tr>
+                )}
+
+                {reconcileRows.map((row) => {
+                  const flagged = row.flagged;
+                  const badge = row.status;
+                  const badgeColor = flagged ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700';
+                  return (
+                    <tr key={`rec-${row.usn}-${row.companyId || 'all'}`} className={flagged ? 'bg-red-50/60' : ''}>
+                      <td className="px-4 py-3 text-sm font-mono text-gray-800">{row.usn}</td>
+                      <td className="px-4 py-3 text-sm text-gray-800">{row.name || '-'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{row.branch || '-'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{row.derivedBatch || '-'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-800">{(row.enteredCgpa !== null && row.officialCgpa !== null) ? `${row.enteredCgpa} vs ${row.officialCgpa}` : (row.enteredCgpa ?? row.officialCgpa ?? '-')}</td>
+                      <td className="px-4 py-3 text-sm">
+                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${badgeColor}`}>
+                          {badge}
+                        </span>
+                        {row.issues?.length > 0 && (
+                          <div className="text-xs text-gray-500 mt-1">{row.issues.join(' | ')}</div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-800">
+                        {row.eligibleForCgpaFilter ? (
+                          <span className="inline-flex items-center gap-1 text-green-700 bg-green-50 px-2 py-1 rounded-full text-xs font-semibold"><FaCheckCircle size={12} /> Eligible</span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-red-700 bg-red-50 px-2 py-1 rounded-full text-xs font-semibold"><FaExclamationTriangle size={12} /> Blocked</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleCgpaVerification(row.usn, true)}
+                            disabled={verifyingStudentId === `${row.usn}-true`}
+                            className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs"
+                          >
+                            Verify
+                          </button>
+                          <button
+                            onClick={() => handleCgpaVerification(row.usn, false)}
+                            disabled={verifyingStudentId === `${row.usn}-false`}
+                            className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs"
+                          >
+                            Flag
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* No reconciliation data message */}
+          {reconcileRows.length === 0 && officialData.length === 0 && studentData.length === 0 && (
+            <div className="text-center py-8 text-gray-500">
+              <p>Upload official + student files and click Validate to see results.</p>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Notice Modal */}
+      {showNoticeModal && (
+        <CoordinatorNoticePanel
+          isOpen={showNoticeModal}
+          onClose={() => setShowNoticeModal(false)}
+          onNoticeCreated={() => {
+            setShowNoticeModal(false);
+            toast.success('Notice created successfully!');
+          }}
+        />
+      )}
     </div>
   );
 };

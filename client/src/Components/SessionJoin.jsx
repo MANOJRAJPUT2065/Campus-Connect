@@ -4,6 +4,7 @@ import { FaVideo, FaUsers, FaClock, FaPlay, FaSpinner, FaArrowRight } from 'reac
 import { toast } from 'react-toastify';
 import { buildApiUrl } from '../config/api';
 import axios from 'axios';
+import { jwtDecode } from 'jwt-decode';
 
 const SessionJoin = () => {
   const [sessions, setSessions] = useState([]);
@@ -19,7 +20,26 @@ const SessionJoin = () => {
 
   const fetchLiveSessions = async () => {
     try {
-      const response = await axios.get(buildApiUrl('/api/sessions/live'));
+      const token = localStorage.getItem('token');
+      let branch = null;
+      let semester = null;
+      if (token) {
+        try {
+          const decoded = jwtDecode(token);
+          branch = decoded.department || decoded.branch || null;
+          semester = decoded.semester ?? null;
+        } catch (err) {
+          // ignore decode errors
+        }
+      }
+
+      const params = new URLSearchParams();
+      if (branch) params.append('branch', String(branch).toLowerCase());
+      if (semester !== null && semester !== undefined) params.append('semester', semester);
+
+      const response = await axios.get(buildApiUrl(`/api/sessions/live${params.toString() ? `?${params.toString()}` : ''}`), {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
       if (response.data.success) {
         setSessions(response.data.sessions || []);
       }
@@ -41,16 +61,29 @@ const SessionJoin = () => {
         return;
       }
 
-      // Get user info from localStorage or token
-      const userId = localStorage.getItem('userId') || 'student';
-      const userName = localStorage.getItem('username') || 'Student';
+      // Get user info from token for reliable branch/semester matching
+      let userId = localStorage.getItem('userId') || 'student';
+      let userName = localStorage.getItem('username') || 'Student';
+      let branch = null;
+      let semester = null;
+      try {
+        const decoded = jwtDecode(token);
+        userId = decoded.userId || decoded.email || decoded.usn || userId;
+        userName = decoded.username || decoded.name || userName;
+        branch = decoded.department || decoded.branch || null;
+        semester = decoded.semester ?? null;
+      } catch (err) {
+        // fall back to local values
+      }
 
       const response = await axios.post(
         buildApiUrl(`/api/sessions/${sessionId}/join`),
         {
           userId,
           userName,
-          userRole: 'student'
+          userRole: 'student',
+          branch: branch ? String(branch).toLowerCase() : null,
+          semester
         },
         {
           headers: { Authorization: `Bearer ${token}` }

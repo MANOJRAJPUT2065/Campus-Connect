@@ -356,22 +356,6 @@ const HomePage = () => {
               </button>
             </p>
           </div>
-
-          {/* Demo Credentials */}
-          {isLogin && (
-            <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-              <p className="text-sm font-semibold text-gray-700 mb-2">Demo Credentials:</p>
-              <p className="text-xs text-gray-600">
-                <strong>Teacher:</strong> teacher001 / teacher123
-              </p>
-              <p className="text-xs text-gray-600">
-                <strong>Coordinator:</strong> coord001 / coord123
-              </p>
-              <p className="text-xs text-gray-600">
-                <strong>Student:</strong> cs20001 / student123
-              </p>
-            </div>
-          )}
         </motion.div>
       </div>
     </div>

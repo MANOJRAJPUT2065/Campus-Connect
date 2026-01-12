@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, Calendar, Clock, FileText, AlertCircle, CheckCircle, Info, Search, Filter, ChevronDown, ChevronUp, X } from 'lucide-react';
-import axios from 'axios';
-import API_URL from '../api.js';
+import { jwtDecode } from 'jwt-decode';
+import { noticesAPI } from '../services/api.js';
 
 const Notices = () => {
   const [notices, setNotices] = useState([]);
@@ -10,6 +10,22 @@ const Notices = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedNotice, setExpandedNotice] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [userBranch, setUserBranch] = useState(null);
+  const [userSemester, setUserSemester] = useState(null);
+
+  // Extract branch/semester from token
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      try {
+        const decoded = jwtDecode(token);
+        setUserBranch(decoded.department || decoded.branch || null);
+        setUserSemester(decoded.semester ?? null);
+      } catch (err) {
+        console.error('Token decode error:', err);
+      }
+    }
+  }, []);
 
   // Sample notices data (replace with actual API call)
   const sampleNotices = [
@@ -74,25 +90,27 @@ const Notices = () => {
   ];
 
   useEffect(() => {
-    // Fetch random daily notices from API
+    // Fetch notices filtered by branch/semester
     fetchNotices();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userBranch, userSemester]);
 
   const fetchNotices = async () => {
     try {
-      // Fetch random daily notices (8 notices per day)
-      const response = await axios.get(`${API_URL}/api/notices/random?count=8`);
-      if (response.data.success) {
+      const params = {};
+      if (userBranch) params.branch = userBranch.toLowerCase();
+      if (userSemester !== null && userSemester !== undefined) params.semester = userSemester;
+
+      const response = await noticesAPI.getAll(params);
+      if (response.data?.success && Array.isArray(response.data.notices)) {
         setNotices(response.data.notices);
       } else {
-        // Fallback to sample data if API fails
-        setNotices(sampleNotices);
+        setNotices([]);
       }
       setLoading(false);
     } catch (error) {
       console.error('Error fetching notices:', error);
-      // Fallback to sample data if API fails
-      setNotices(sampleNotices);
+      setNotices([]);
       setLoading(false);
     }
   };

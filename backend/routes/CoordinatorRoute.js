@@ -1,4 +1,5 @@
 import express from 'express';
+import multer from 'multer';
 import { authenticateToken, requireRole } from '../middlewares/auth.js';
 import {
   // Club Management
@@ -20,10 +21,40 @@ import {
   sendEventAnnouncement,
   
   // Analytics
-  getCoordinatorAnalytics
+  getCoordinatorAnalytics,
+
+  // Placement / CGPA verification
+  getPlacementStudents,
+  verifyStudentCgpa,
+  validatePlacementCsv,
+  uploadOfficialPlacement,
+  uploadStudentPlacement,
+  reconcilePlacement,
+  purgePlacementUploads
 } from '../controllers/CoordinatorController.js';
 
 const router = express.Router();
+
+// Multer for placement uploads (memory storage, CSV or Excel)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const name = file.originalname.toLowerCase();
+    const allowedMime = [
+      'text/csv',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    ];
+    const isAllowed =
+      allowedMime.includes(file.mimetype) ||
+      name.endsWith('.csv') ||
+      name.endsWith('.xls') ||
+      name.endsWith('.xlsx');
+    if (!isAllowed) return cb(new Error('Only CSV or Excel files are allowed'));
+    cb(null, true);
+  }
+});
 
 // All routes require authentication and coordinator role
 router.use(authenticateToken);
@@ -72,6 +103,31 @@ router.post('/events/:eventId/registrations/:registrationId/reject', rejectParti
 
 // POST /api/coordinator/events/:eventId/announcements - Send announcement to event participants
 router.post('/events/:eventId/announcements', sendEventAnnouncement);
+
+/**
+ * PLACEMENT / STUDENT VALIDATION ROUTES
+ */
+
+// GET /api/coordinator/students - Get students with CGPA insights
+router.get('/students', getPlacementStudents);
+
+// PATCH /api/coordinator/students/:studentId/cgpa-verification - Verify or flag CGPA
+router.patch('/students/:studentId/cgpa-verification', verifyStudentCgpa);
+
+// POST /api/coordinator/placement/validate-csv - Upload placement CSV and validate CGPA
+router.post('/placement/validate-csv', upload.single('file'), validatePlacementCsv);
+
+// POST /api/coordinator/placement/official/upload - Upload official academic CSV/Excel
+router.post('/placement/official/upload', upload.single('file'), uploadOfficialPlacement);
+
+// POST /api/coordinator/placement/student/upload - Upload student placement CSV/Excel for a company
+router.post('/placement/student/upload', upload.single('file'), uploadStudentPlacement);
+
+// GET /api/coordinator/placement/reconcile - Compare student vs official by USN
+router.get('/placement/reconcile', reconcilePlacement);
+
+// POST /api/coordinator/placement/purge - Remove placement uploads (all/official/student, optional companyId)
+router.post('/placement/purge', purgePlacementUploads);
 
 /**
  * ANALYTICS ROUTES
